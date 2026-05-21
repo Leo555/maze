@@ -680,14 +680,19 @@ body {
   background: transparent;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
+  /*
+   * PC 端默认：复盘卡靠到右上角，避免遮挡迷宫主视图
+   * 用 flex 的 justify-content + align-items 完成定位，无需绝对定位
+   * 整层 pointer-events:none，仅卡片自己设 auto，迷宫区域可以接受 pointer 事件
+   */
   align-items: flex-start;
-  justify-content: center;
-  padding-top: 28px;
+  justify-content: flex-end;
+  padding: 16px 16px 0 0;
   pointer-events: none;
 }
 .scene.scene-review .review-card {
   pointer-events: auto;
-  padding: 14px 22px 12px;
+  padding: 10px 16px 10px;
   min-width: 0;
   /*
    * 显式覆写 .scene-card 的 backdrop-filter 与 box-shadow：
@@ -698,51 +703,60 @@ body {
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
   box-shadow: 0 6px 20px rgba(74, 60, 42, 0.14);
-  /* 整体尺寸压缩 */
-  max-width: min(560px, calc(100% - 32px));
+  /* 整体尺寸再压缩一档（PC 角落使用） */
+  max-width: 280px;
+  text-align: left;
 }
 /*
  * 子元素覆写：抑制 .scene-card 默认的大字号/大间距，
  * 让小卡保持紧凑，不会因为 .scene-title/.scene-subtitle 默认样式被"撑大"
  */
 .scene.scene-review .review-card .scene-title {
-  font-size: 18px !important;
-  letter-spacing: 4px;
-  margin: 0 0 4px;
+  font-size: 14px !important;
+  letter-spacing: 3px;
+  margin: 0 0 2px;
+  text-align: center;
 }
 .scene.scene-review .review-card .scene-subtitle {
-  font-size: 12px;
-  letter-spacing: 2px;
-  margin: 0 0 8px !important;
+  font-size: 11px;
+  letter-spacing: 1px;
+  margin: 0 0 6px !important;
+  text-align: center;
+  white-space: normal; /* 覆盖基类的 nowrap，让长 tip 可以换行而非截断 */
+  overflow: visible;
+  text-overflow: clip;
 }
 .scene.scene-review .review-card .btn-group {
   margin-top: 4px;
 }
 .scene.scene-review .review-card .btn {
-  padding: 8px 18px;
-  min-width: 120px;
-  font-size: 13px;
+  padding: 6px 14px;
+  min-width: 0;
+  width: 100%;
+  font-size: 12px;
 }
 
 /* 复盘浮窗内图例：色块 + 文字，与画面里的两条路径线一一对应 */
 .review-legend {
   display: flex;
-  gap: 18px;
+  gap: 12px;
   justify-content: center;
   align-items: center;
-  margin: 0 0 14px;
-  font-size: 13px;
+  flex-wrap: wrap;
+  margin: 0 0 8px;
+  font-size: 11px;
   color: var(--text-soft);
 }
 .review-legend .legend-item {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
+  white-space: nowrap;
 }
 .review-legend .legend-dot {
   display: inline-block;
-  width: 22px;
-  height: 4px;
+  width: 16px;
+  height: 3px;
   border-radius: 2px;
 }
 /* 最佳路径：用 accent 色（与游戏内 best path 金线一致） */
@@ -1060,6 +1074,20 @@ body {
     height: 50px;
     font-size: 20px;
     border-radius: 12px;
+  }
+
+  /*
+   * 复盘浮窗：移动端右上角空间不够（HUD 角已被静音/菜单按钮占用），
+   * 改回顶部居中条状，保持紧凑但更易看清
+   */
+  .scene.scene-review {
+    align-items: flex-start;
+    justify-content: center;
+    padding: 12px 12px 0;
+  }
+  .scene.scene-review .review-card {
+    max-width: calc(100% - 24px);
+    width: auto;
   }
 }
 
