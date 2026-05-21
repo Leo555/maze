@@ -687,14 +687,41 @@ body {
 }
 .scene.scene-review .review-card {
   pointer-events: auto;
-  padding: 18px 28px;
+  padding: 14px 22px 12px;
   min-width: 0;
-  background: var(--surface-strong);
-  box-shadow: 0 10px 30px rgba(74, 60, 42, 0.18);
+  /*
+   * 显式覆写 .scene-card 的 backdrop-filter 与 box-shadow：
+   *   - 复盘场景核心是看迷宫，不希望整张卡形成大块视觉重心
+   *   - 用半透明 + 轻投影即可，不再做 14px 模糊
+   */
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  box-shadow: 0 6px 20px rgba(74, 60, 42, 0.14);
+  /* 整体尺寸压缩 */
+  max-width: min(560px, calc(100% - 32px));
+}
+/*
+ * 子元素覆写：抑制 .scene-card 默认的大字号/大间距，
+ * 让小卡保持紧凑，不会因为 .scene-title/.scene-subtitle 默认样式被"撑大"
+ */
+.scene.scene-review .review-card .scene-title {
+  font-size: 18px !important;
+  letter-spacing: 4px;
+  margin: 0 0 4px;
+}
+.scene.scene-review .review-card .scene-subtitle {
+  font-size: 12px;
+  letter-spacing: 2px;
+  margin: 0 0 8px !important;
+}
+.scene.scene-review .review-card .btn-group {
+  margin-top: 4px;
 }
 .scene.scene-review .review-card .btn {
-  padding: 10px 22px;
-  min-width: 140px;
+  padding: 8px 18px;
+  min-width: 120px;
+  font-size: 13px;
 }
 
 /* 复盘浮窗内图例：色块 + 文字，与画面里的两条路径线一一对应 */

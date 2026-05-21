@@ -600,8 +600,8 @@ export function showOptimalReview(
   `;
 
   card.innerHTML = `
-    <div class="scene-title" style="font-size: 22px; margin: 0">最 佳 路 径</div>
-    <div class="scene-subtitle" style="margin: 6px 0 10px">${tip}</div>
+    <div class="scene-title">最 佳 路 径</div>
+    <div class="scene-subtitle">${tip}</div>
     ${legendHtml}
   `;
 
