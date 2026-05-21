@@ -417,6 +417,11 @@ export function showResult(
     onNext: () => void;
     onRetry: () => void;
     onMenu: () => void;
+    /**
+     * 可选：「查看最佳路径」入口。
+     * Game 端在 steps > optimal（路径非最优）时才传入此回调，本页据此决定按钮可见性。
+     */
+    onShowOptimal?: () => void;
   }
 ): void {
   audio.playSfx('level_complete');
@@ -458,6 +463,16 @@ export function showResult(
     btnGroup.appendChild(next);
   }
 
+  // 「查看最佳路径」：仅当路径非最优且 Game 提供回调时显示
+  if (handlers.onShowOptimal) {
+    const showOpt = document.createElement('button');
+    showOpt.className = 'btn';
+    showOpt.textContent = '查 看 最 佳 路 径';
+    attachClickSfx(showOpt);
+    showOpt.onclick = () => handlers.onShowOptimal!();
+    btnGroup.appendChild(showOpt);
+  }
+
   const retry = document.createElement('button');
   retry.className = 'btn';
   retry.textContent = '重  来';
@@ -491,7 +506,12 @@ export function showResult(
 // ==================== 失败 ====================
 export function showFail(
   reason: string,
-  handlers: { onRetry: () => void; onMenu: () => void }
+  handlers: {
+    onRetry: () => void;
+    onMenu: () => void;
+    /** 可选：「查看最佳路径」入口（失败时常显示，让玩家了解最优解） */
+    onShowOptimal?: () => void;
+  }
 ): void {
   audio.playSfx('level_fail');
 
@@ -512,6 +532,15 @@ export function showFail(
   attachClickSfx(retry);
   retry.onclick = () => handlers.onRetry();
 
+  if (handlers.onShowOptimal) {
+    const showOpt = document.createElement('button');
+    showOpt.className = 'btn';
+    showOpt.textContent = '查 看 最 佳 路 径';
+    attachClickSfx(showOpt);
+    showOpt.onclick = () => handlers.onShowOptimal!();
+    btnGroup.appendChild(showOpt);
+  }
+
   const menu = document.createElement('button');
   menu.className = 'btn';
   menu.textContent = '主 菜 单';
@@ -521,6 +550,54 @@ export function showFail(
   btnGroup.appendChild(retry);
   btnGroup.appendChild(menu);
   card.appendChild(btnGroup);
+  scene.appendChild(card);
+  showOverlay(scene);
+}
+
+// ==================== 最佳路径观察模式 ====================
+/**
+ * 通关 / 失败后的「查看最佳路径」浮窗。
+ *
+ * 与其它 scene 不同，这个浮窗刻意做得轻量：
+ *   - 不遮挡迷宫主视图（只占顶部一小条）
+ *   - 不阻断 canvas 渲染（迷宫和最佳路径线都仍可见）
+ *   - 仅展示提示 + 关闭按钮
+ *
+ * 关闭按钮调用 onClose，由 Game 切回 transition 状态并重新展示结算/失败页。
+ */
+export function showOptimalReview(
+  data: { steps: number; optimal: number; passed: boolean },
+  onClose: () => void
+): void {
+  audio.playSfx('ui_open');
+
+  const scene = document.createElement('div');
+  scene.className = 'scene scene-review';
+
+  const card = document.createElement('div');
+  card.className = 'scene-card review-card';
+
+  const efficiency =
+    data.optimal > 0 ? Math.min(100, Math.round((data.optimal / data.steps) * 100)) : 100;
+  const tip = data.passed
+    ? `你走了 ${data.steps} 步 · 最优 ${data.optimal} 步 · 效率 ${efficiency}%`
+    : `本关最优解：${data.optimal} 步`;
+
+  card.innerHTML = `
+    <div class="scene-title" style="font-size: 22px; margin: 0">最 佳 路 径</div>
+    <div class="scene-subtitle" style="margin: 6px 0 14px">${tip}</div>
+  `;
+
+  const btnGroup = document.createElement('div');
+  btnGroup.className = 'btn-group';
+  const back = document.createElement('button');
+  back.className = 'btn primary';
+  back.textContent = '返 回 结 算';
+  attachClickSfx(back);
+  back.onclick = () => onClose();
+  btnGroup.appendChild(back);
+  card.appendChild(btnGroup);
+
   scene.appendChild(card);
   showOverlay(scene);
 }

@@ -669,6 +669,34 @@ body {
   color: var(--text);
 }
 
+/* ========== 最佳路径观察模式 浮窗 ========== */
+/*
+ * 与普通 .scene 不同：
+ *   - 不全屏遮罩、无背景模糊（让玩家专心看迷宫上叠加的最佳路径线）
+ *   - 居中靠顶布置，小尺寸卡片
+ *   - 仅 scene 的最外层做指针穿透；卡片自己仍可点击
+ */
+.scene.scene-review {
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 28px;
+  pointer-events: none;
+}
+.scene.scene-review .review-card {
+  pointer-events: auto;
+  padding: 18px 28px;
+  min-width: 0;
+  background: var(--surface-strong);
+  box-shadow: 0 10px 30px rgba(74, 60, 42, 0.18);
+}
+.scene.scene-review .review-card .btn {
+  padding: 10px 22px;
+  min-width: 140px;
+}
+
 /* Toast 提示 */
 .toast {
   position: absolute;

@@ -30,13 +30,15 @@ import {
   showMainMenu,
   showLevelSelect,
   showSettings,
+  showOptimalReview,
   hideOverlay,
 } from '../ui/Overlays';
 import { randomSeed } from '../core/utils';
 import { EasterEgg } from './EasterEgg';
 import { playGoalCelebration } from '../fx/Celebration';
+import { shortestPath, shortestPathThroughWaypoints } from '../maze/Generator';
 
-type State = 'menu' | 'playing' | 'paused' | 'transition';
+type State = 'menu' | 'playing' | 'paused' | 'transition' | 'review';
 
 export class Game {
   private renderer: Renderer;
@@ -432,27 +434,58 @@ export class Game {
     setTimeout(() => {
       this.hud.hide();
       audio.stopBgm(600);
-      showResult(
-        {
-          levelId: this.currentLevelId,
-          time,
-          steps: this.steps,
-          optimal: this.level!.optimalPath,
-          stars,
-          isNewBest,
-          hasNext,
-        },
-        {
-          onNext: () => {
-            if (hasNext) {
-              router.navigate({ name: 'play', levelId: this.currentLevelId + 1 });
-            }
-          },
-          onRetry: () => this.startLevel(this.currentLevelId),
-          onMenu: () => router.navigate({ name: 'menu' }),
-        }
-      );
+      this.openResultOverlay({
+        time,
+        steps: this.steps,
+        stars,
+        isNewBest,
+        hasNext,
+      });
     }, 1800);
+  }
+
+  /**
+   * 渲染通关结算页。抽出来是因为「查看最佳路径」回到结算时需要再次展示同一份数据。
+   */
+  private openResultOverlay(args: {
+    time: number;
+    steps: number;
+    stars: number;
+    isNewBest: boolean;
+    hasNext: boolean;
+  }): void {
+    if (!this.level) return;
+    const optimal = this.level.optimalPath;
+    const allowReview = args.steps > optimal && optimal > 0; // 路径非最优时才提供查看入口
+
+    showResult(
+      {
+        levelId: this.currentLevelId,
+        time: args.time,
+        steps: args.steps,
+        optimal,
+        stars: args.stars,
+        isNewBest: args.isNewBest,
+        hasNext: args.hasNext,
+      },
+      {
+        onNext: () => {
+          if (args.hasNext) {
+            router.navigate({ name: 'play', levelId: this.currentLevelId + 1 });
+          }
+        },
+        onRetry: () => this.startLevel(this.currentLevelId),
+        onMenu: () => router.navigate({ name: 'menu' }),
+        onShowOptimal: allowReview
+          ? () =>
+              this.enterReview({
+                steps: args.steps,
+                passed: true,
+                returnToOverlay: () => this.openResultOverlay(args),
+              })
+          : undefined,
+      }
+    );
   }
 
   /**
@@ -465,11 +498,88 @@ export class Game {
     audio.stopBgm(600);
     setTimeout(() => {
       this.hud.hide();
-      showFail(reason, {
-        onRetry: () => this.startLevel(this.currentLevelId),
-        onMenu: () => router.navigate({ name: 'menu' }),
-      });
+      this.openFailOverlay(reason);
     }, 800);
+  }
+
+  /** 渲染失败页（同样支持「查看最佳路径」并循环返回） */
+  private openFailOverlay(reason: string): void {
+    if (!this.level) return;
+    const allowReview = this.level.optimalPath > 0;
+    showFail(reason, {
+      onRetry: () => this.startLevel(this.currentLevelId),
+      onMenu: () => router.navigate({ name: 'menu' }),
+      onShowOptimal: allowReview
+        ? () =>
+            this.enterReview({
+              steps: this.steps,
+              passed: false,
+              returnToOverlay: () => this.openFailOverlay(reason),
+            })
+        : undefined,
+    });
+  }
+
+  // ============ 观察模式（查看最佳路径） ============
+  /**
+   * 进入观察模式：
+   *   - 隐藏 overlay 让玩家看到完整迷宫
+   *   - 在迷宫上叠加最佳路径线（复用 Renderer.showBestPath）
+   *   - 不接受输入；HUD 保持隐藏
+   *   - 顶部显示一个轻量浮窗，含「返回结算」按钮
+   *
+   * 起点用迷宫起点，让玩家看到「从头到尾」的完整最优路径，而不是从当前出口点出发的退化路径。
+   */
+  private enterReview(args: {
+    steps: number;
+    passed: boolean;
+    returnToOverlay: () => void;
+  }): void {
+    if (!this.level) return;
+    this.state = 'review';
+    hideOverlay();
+
+    const maze = this.level.maze;
+    const keys = this.level.entities
+      .filter((e) => e.kind === 'key') // 复盘最优解时考虑全部钥匙（不论玩家是否已收）
+      .map((e) => ({ x: e.x, y: e.y }));
+    const path =
+      keys.length > 0
+        ? shortestPathThroughWaypoints(maze, maze.start, keys, maze.exit)
+        : shortestPath(maze, maze.start, maze.exit);
+    if (path.length >= 2) {
+      this.renderer.showBestPath(path);
+    }
+
+    // 把玩家暂时定格在起点，避免观察期间画面里出现位于出口的玩家把路径起点遮挡
+    if (this.player) {
+      this.player.state.gx = maze.start.x;
+      this.player.state.gy = maze.start.y;
+      this.player.state.px = maze.start.x;
+      this.player.state.py = maze.start.y;
+      this.player.state.moving = false;
+    }
+
+    // 渐隐与渐显的视觉过渡复位（之前 completeLevel 触发过 fadeOut，需要在 review 模式下手动复位）
+    this.renderer.fadeOut = 0;
+    this.renderer.fadeIn = 0;
+
+    // 等过渡帧（350ms）让 overlay 真正消失后，再显示观察浮窗，避免与 overlay hide 动画堆叠
+    setTimeout(() => {
+      if (this.state !== 'review') return;
+      showOptimalReview(
+        { steps: args.steps, optimal: this.level!.optimalPath, passed: args.passed },
+        () => this.exitReview(args.returnToOverlay)
+      );
+    }, 360);
+  }
+
+  /** 退出观察模式：清除最佳路径 → 回到结算/失败 overlay */
+  private exitReview(returnToOverlay: () => void): void {
+    this.renderer.clearBestPath();
+    // 状态机切回 transition，让 openResultOverlay/openFailOverlay 中的 'transition' 假设保持一致
+    this.state = 'transition';
+    returnToOverlay();
   }
 
   /**
