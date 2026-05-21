@@ -194,6 +194,11 @@ export class Renderer {
     const ctx = this.ctx;
     const layout = this.layout(maze);
 
+    // 画布尺寸过小或迷宫尺寸异常时跳过绘制，避免下游渐变 / 几何参数为 0 导致异常
+    if (layout.cellSize <= 0 || this.cssWidth <= 0 || this.cssHeight <= 0) {
+      return;
+    }
+
     // 检查静态层是否需要重建（maze 实例 / theme 引用 / dpr / 尺寸 变更时）
     this.ensureStaticLayer(maze, theme, layout);
 
@@ -311,20 +316,25 @@ export class Renderer {
     theme: Theme,
     layout: RenderContext
   ): void {
-    ctx.fillStyle = theme.floorAccent;
-    ctx.globalAlpha = 0.5;
+    // 性能优化：用单一 Path2D 累加所有已访问格子，一次 fill 完成。
+    // 这是每帧调用的热路径，N×N 关卡若用 fillRect 逐次调用代价显著。
+    const cs = layout.cellSize;
+    const path = new Path2D();
+    let hit = false;
     for (let y = 0; y < maze.height; y++) {
+      const row = this.visited[y];
+      if (!row) continue;
       for (let x = 0; x < maze.width; x++) {
-        if (this.visited[y]?.[x]) {
-          ctx.fillRect(
-            layout.offsetX + x * layout.cellSize,
-            layout.offsetY + y * layout.cellSize,
-            layout.cellSize,
-            layout.cellSize
-          );
+        if (row[x]) {
+          path.rect(layout.offsetX + x * cs, layout.offsetY + y * cs, cs, cs);
+          hit = true;
         }
       }
     }
+    if (!hit) return;
+    ctx.fillStyle = theme.floorAccent;
+    ctx.globalAlpha = 0.5;
+    ctx.fill(path);
     ctx.globalAlpha = 1;
   }
 
@@ -484,43 +494,51 @@ export class Renderer {
     const wallThickness = Math.max(2, cs * 0.18);
     const half = wallThickness / 2;
 
-    // 阴影层
-    ctx.fillStyle = theme.wallShadow;
+    // 性能优化：用 Path2D 批处理代替逐次 fillRect。
+    // 同色矩形累加进一个 path → 一次 fill()，可省下 90%+ 的 fillStyle / 提交开销。
+    // 静态层只在关卡切换时跑一次，但 cellCount × 2~4 条墙可能多达数千次，仍值得。
+
+    // 1) 阴影层：S / E 墙的偏移投影
+    const shadowPath = new Path2D();
     for (let y = 0; y < maze.height; y++) {
       for (let x = 0; x < maze.width; x++) {
         const c = maze.cells[y][x];
         const px = layout.offsetX + x * cs;
         const py = layout.offsetY + y * cs;
         if (c.walls.S) {
-          ctx.fillRect(px - half + 2, py + cs - half + 2, cs + wallThickness, wallThickness);
+          shadowPath.rect(px - half + 2, py + cs - half + 2, cs + wallThickness, wallThickness);
         }
         if (c.walls.E) {
-          ctx.fillRect(px + cs - half + 2, py - half + 2, wallThickness, cs + wallThickness);
+          shadowPath.rect(px + cs - half + 2, py - half + 2, wallThickness, cs + wallThickness);
         }
       }
     }
+    ctx.fillStyle = theme.wallShadow;
+    ctx.fill(shadowPath);
 
-    // 主墙体
-    ctx.fillStyle = theme.wall;
+    // 2) 主墙体：N / W / S / E 四面
+    const wallPath = new Path2D();
     for (let y = 0; y < maze.height; y++) {
       for (let x = 0; x < maze.width; x++) {
         const c = maze.cells[y][x];
         const px = layout.offsetX + x * cs;
         const py = layout.offsetY + y * cs;
         if (c.walls.N) {
-          ctx.fillRect(px - half, py - half, cs + wallThickness, wallThickness);
+          wallPath.rect(px - half, py - half, cs + wallThickness, wallThickness);
         }
         if (c.walls.W) {
-          ctx.fillRect(px - half, py - half, wallThickness, cs + wallThickness);
+          wallPath.rect(px - half, py - half, wallThickness, cs + wallThickness);
         }
         if (c.walls.S) {
-          ctx.fillRect(px - half, py + cs - half, cs + wallThickness, wallThickness);
+          wallPath.rect(px - half, py + cs - half, cs + wallThickness, wallThickness);
         }
         if (c.walls.E) {
-          ctx.fillRect(px + cs - half, py - half, wallThickness, cs + wallThickness);
+          wallPath.rect(px + cs - half, py - half, wallThickness, cs + wallThickness);
         }
       }
     }
+    ctx.fillStyle = theme.wall;
+    ctx.fill(wallPath);
   }
 
   private drawPlayer(
