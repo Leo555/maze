@@ -27,10 +27,6 @@ export interface LevelConfig {
   movingWalls: number; // 周期开合墙数量
   chasers: number; // 追逐者数量
 
-  // 评分阈值（秒）
-  star3Time: number;
-  star2Time: number;
-
   bgm: string; // BGM 资源 id
 }
 
@@ -320,13 +316,6 @@ function buildLevels(): LevelConfig[] {
       chasers = clamp(1 + Math.floor((chapterPos - 1) / 4), 1, 3);
     }
 
-    // ===== 评分时间 =====
-    // star3：接近最优解 + 一些操作余量
-    // star2：稍宽松；星 1 默认拿到
-    const tightness = chapter.enableTime ? 0.85 : 1.0;
-    const star3Time = Math.round((size * 4 + chapterIdx * 6) * tightness);
-    const star2Time = Math.round((size * 7 + chapterIdx * 10) * tightness);
-
     // ===== 名称 =====
     // 章节名 + 章内编号（1-1, 1-2, ..., 10-10）
     const name = `${chapter.name} ${chapterIdx}-${chapterPos}`;
@@ -347,8 +336,6 @@ function buildLevels(): LevelConfig[] {
       portals,
       movingWalls,
       chasers,
-      star3Time,
-      star2Time,
       bgm: chapter.bgm,
     });
   }

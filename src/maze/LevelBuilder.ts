@@ -40,6 +40,10 @@ export interface LevelRuntime {
   config: LevelConfig;
   maze: Maze;
   optimalPath: number; // 最短路径长度（用于评分）
+  /** 运行时计算的三星时间阈值（秒），基于 optimalPath 与视野等动态得出 */
+  star3Time: number;
+  /** 运行时计算的二星时间阈值（秒） */
+  star2Time: number;
   entities: Entity[];
   seed: number;
 }
@@ -125,10 +129,36 @@ export function buildLevel(config: LevelConfig, seed: number = randomSeed()): Le
     }
   }
 
+  // ===== 运行时星级时间阈值 =====
+  // 基于真实最优步数动态生成，比 levels.ts 里的静态公式（size×4）更准
+  //
+  // 设计：
+  //   · 每步耗时 ≈ 0.7s（步进缓动 0.15s + 操作思考/反应 ~0.55s）
+  //   · 视野受限关卡需要更多探索时间，按视野等级加倍率
+  //   · 倒计时关卡稍微紧一点（玩家本来就有时间压力，会跑得更急）
+  //   · star2 比 star3 留出 ~80% 富余空间
+  //
+  // 例：第 1 关 size=11 optimal≈70 → star3 ≈ 70×0.7 ≈ 49s（与原静态值 50 接近，
+  // 但变得依据真实路径而非 size）
+  const visionMul: Record<LevelConfig['vision'], number> = {
+    full: 1.0,
+    large: 1.15,
+    medium: 1.35,
+    small: 1.6,
+  };
+  const STEP_SECONDS = 0.7;
+  const baseTime = optimalPath * STEP_SECONDS * visionMul[config.vision];
+  // 倒计时关卡的星 3 略紧一档
+  const tightness = config.timeLimit > 0 ? 0.92 : 1.0;
+  const star3Time = Math.max(8, Math.round(baseTime * 1.0 * tightness));
+  const star2Time = Math.max(15, Math.round(baseTime * 1.8 * tightness));
+
   return {
     config,
     maze,
     optimalPath,
+    star3Time,
+    star2Time,
     entities,
     seed,
   };

@@ -481,7 +481,7 @@ export class Game {
     this.state = 'transition';
 
     const time = this.elapsed;
-    const stars = this.calcStars(time);
+    const stars = this.calcStars(time, this.steps);
     const isNewBest = storage.submit(this.currentLevelId, time, stars);
     const hasNext = this.currentLevelId < levels.length;
 
@@ -584,12 +584,42 @@ export class Game {
     }, 800);
   }
 
-  private calcStars(time: number): number {
+  /**
+   * 星级判定：综合「时间」与「路径效率」，取两者较优结果
+   *
+   * - 路径维度（更重要）：
+   *     · 走出最优解（efficiency ≥ 98%）→ 直接 3 星
+   *     · efficiency ≥ 85% → 至少 2 星
+   *     · 否则 1 星
+   *
+   * - 时间维度（保留快速通关奖励）：
+   *     · time ≤ star3Time → 至少 3 星
+   *     · time ≤ star2Time → 至少 2 星
+   *
+   * 时间阈值由 LevelBuilder 基于真实 optimalPath 动态计算（见 buildLevel），
+   * 不再使用 levels.ts 里按 size×4 估算的静态值——后者无法适配带钥匙的真实最短路径。
+   *
+   * 两个维度独立计算，取 max。这样玩家「走完美路线」或「快速通关」都能拿 3 星，
+   * 而不会出现「100% 路径效率但只 2 星」这种反直觉情况。
+   */
+  private calcStars(time: number, steps: number): number {
     if (!this.level) return 0;
-    const c = this.level.config;
-    if (time <= c.star3Time) return 3;
-    if (time <= c.star2Time) return 2;
-    return 1;
+
+    // 时间维度（运行时阈值）
+    let timeStars = 1;
+    if (time <= this.level.star3Time) timeStars = 3;
+    else if (time <= this.level.star2Time) timeStars = 2;
+
+    // 路径维度：efficiency = optimalPath / steps（玩家步数越接近最优越高）
+    const optimal = this.level.optimalPath;
+    let pathStars = 1;
+    if (optimal > 0 && steps > 0) {
+      const efficiency = optimal / steps; // 0~1
+      if (efficiency >= 0.98) pathStars = 3;
+      else if (efficiency >= 0.85) pathStars = 2;
+    }
+
+    return Math.max(timeStars, pathStars);
   }
 
   // ============ 主循环 ============
