@@ -114,6 +114,8 @@ export class Hud {
 
     // 触屏设备：构建虚拟方向键 + 冲刺按钮
     if (this.isTouch) {
+      // 加 class，让 CSS 调整 minimap 等元素位置（避免与右下 D-pad 重叠）
+      this.root.classList.add('has-touch-pad');
       this.buildTouchControls();
     }
   }
