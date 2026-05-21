@@ -14,9 +14,10 @@ export class Minimap {
   constructor(container: HTMLElement, size = 140) {
     this.size = size;
     this.canvas = document.createElement('canvas');
-    const dpr = window.devicePixelRatio || 1;
-    this.canvas.width = size * dpr;
-    this.canvas.height = size * dpr;
+    // 与主 Renderer 保持一致：dpr 上限 3，避免高 dpr 屏吃掉过多显存
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+    this.canvas.width = Math.round(size * dpr);
+    this.canvas.height = Math.round(size * dpr);
     this.canvas.style.width = '100%';
     this.canvas.style.height = '100%';
     this.canvas.style.display = 'block';
@@ -25,6 +26,8 @@ export class Minimap {
     if (!ctx) throw new Error('Canvas 2D not supported');
     this.ctx = ctx;
     this.ctx.scale(dpr, dpr);
+    // 关闭图像平滑，让小地图墙体边缘锐利
+    this.ctx.imageSmoothingEnabled = false;
   }
 
   draw(

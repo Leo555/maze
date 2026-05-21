@@ -62,7 +62,15 @@ body {
   width: 100%;
   height: 100%;
   display: block;
+  /*
+   * 让浏览器在最终合成时不再做插值软化：
+   *   - high-quality: 用更好的算法（Chrome/Edge）
+   *   - 旧浏览器 fallback: -webkit-optimize-contrast
+   * 因为我们在 Canvas 内已经用 dpr 精确分辨率渲染了，
+   * 浏览器只需 1:1 显示即可，避免外层 CSS 缩放再插值导致的羽化。
+   */
   image-rendering: -webkit-optimize-contrast;
+  image-rendering: high-quality;
 }
 
 #hud {

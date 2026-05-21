@@ -90,13 +90,19 @@ export class Renderer {
 
   private applyResize = (): void => {
     this.resizePending = false;
-    this.dpr = window.devicePixelRatio || 1;
+    // dpr 上限 3：4K 屏 / 部分 retina 平板有 dpr=2.5/3 但视觉收益已饱和，
+    // 再往上只会拖性能与显存（静态层 canvas 体积是 dpr² 倍增长）
+    const rawDpr = window.devicePixelRatio || 1;
+    this.dpr = Math.min(rawDpr, 3);
     this.cssWidth = window.innerWidth;
     this.cssHeight = window.innerHeight;
-    this.canvas.width = Math.floor(this.cssWidth * this.dpr);
-    this.canvas.height = Math.floor(this.cssHeight * this.dpr);
+    // 用 round 而非 floor，避免某些 dpr（如 1.25 / 1.5）下丢半像素后被浏览器二次插值导致的墙边羽化
+    this.canvas.width = Math.round(this.cssWidth * this.dpr);
+    this.canvas.height = Math.round(this.cssHeight * this.dpr);
     this.canvas.style.width = `${this.cssWidth}px`;
     this.canvas.style.height = `${this.cssHeight}px`;
+    // 关闭主 ctx 的图像平滑：drawImage 静态层时不做插值，墙边保持锐利
+    this.ctx.imageSmoothingEnabled = false;
     this.staticDirty = true; // 尺寸变化 → 静态层需重建
   };
 
@@ -289,8 +295,8 @@ export class Renderer {
       return;
     }
 
-    const w = Math.floor(this.cssWidth * this.dpr);
-    const h = Math.floor(this.cssHeight * this.dpr);
+    const w = Math.round(this.cssWidth * this.dpr);
+    const h = Math.round(this.cssHeight * this.dpr);
     if (w <= 0 || h <= 0) return;
 
     // 复用已有 canvas（仅尺寸不一致时重建），避免反复分配大块显存
@@ -304,6 +310,8 @@ export class Renderer {
 
     sctx.setTransform(1, 0, 0, 1, 0, 0); // 重置
     sctx.clearRect(0, 0, w, h);
+    // 关闭离屏 ctx 的图像平滑，让墙体/地板的硬边在 dpr 缩放下不被重新插值
+    sctx.imageSmoothingEnabled = false;
     sctx.scale(this.dpr, this.dpr);
 
     // 背景
@@ -510,8 +518,11 @@ export class Renderer {
     layout: RenderContext
   ): void {
     const cs = layout.cellSize;
-    const wallThickness = Math.max(2, cs * 0.18);
+    // 墙厚度对齐到 2 的倍数：保证 wallThickness/2 仍是整数 → 偏移落在像素边界，不被亚像素抗锯齿吃糊
+    const rawT = Math.max(2, Math.round(cs * 0.18));
+    const wallThickness = rawT % 2 === 0 ? rawT : rawT + 1;
     const half = wallThickness / 2;
+    const shadowOffset = Math.max(1, Math.round(cs * 0.04)); // 之前固定 +2，按 cellSize 自适应
 
     // 性能优化：用 Path2D 批处理代替逐次 fillRect。
     // 同色矩形累加进一个 path → 一次 fill()，可省下 90%+ 的 fillStyle / 提交开销。
@@ -525,10 +536,10 @@ export class Renderer {
         const px = layout.offsetX + x * cs;
         const py = layout.offsetY + y * cs;
         if (c.walls.S) {
-          shadowPath.rect(px - half + 2, py + cs - half + 2, cs + wallThickness, wallThickness);
+          shadowPath.rect(px - half + shadowOffset, py + cs - half + shadowOffset, cs + wallThickness, wallThickness);
         }
         if (c.walls.E) {
-          shadowPath.rect(px + cs - half + 2, py - half + 2, wallThickness, cs + wallThickness);
+          shadowPath.rect(px + cs - half + shadowOffset, py - half + shadowOffset, wallThickness, cs + wallThickness);
         }
       }
     }
