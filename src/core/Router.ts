@@ -77,10 +77,6 @@ export class Router {
     return true;
   }
 
-  getCurrent(): Route {
-    return this.current;
-  }
-
   private handleHashChange = (): void => {
     if (this.suppressNext) {
       this.suppressNext = false;

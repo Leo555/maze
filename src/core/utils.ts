@@ -6,21 +6,9 @@ export function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
 }
 
-export function lerp(a: number, b: number, t: number): number {
-  return a + (b - a) * t;
-}
-
-/** 缓动函数 */
+/** 缓动函数（仅保留实际使用到的） */
 export const Easing = {
-  linear: (t: number) => t,
   easeOutQuad: (t: number) => 1 - (1 - t) * (1 - t),
-  easeInOutQuad: (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2),
-  easeOutCubic: (t: number) => 1 - Math.pow(1 - t, 3),
-  easeOutBack: (t: number) => {
-    const c1 = 1.70158;
-    const c3 = c1 + 1;
-    return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
-  },
 };
 
 /** Mulberry32 种子随机数生成器 */

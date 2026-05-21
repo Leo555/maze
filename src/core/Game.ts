@@ -453,9 +453,6 @@ export class Game {
         audio.playSfx('pickup_map');
         this.hud.showToast('地图揭示 3 秒', 1200);
         break;
-      case 'dash_shoes':
-        audio.playSfx('pickup_dash');
-        break;
       default:
         break;
     }

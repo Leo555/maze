@@ -15,13 +15,8 @@ export type SfxId =
   | 'pickup_key'
   | 'pickup_hourglass'
   | 'pickup_map'
-  | 'pickup_dash'
   | 'all_keys_collected'
-  | 'door_open'
   | 'door_blocked'
-  | 'portal_enter'
-  | 'portal_exit'
-  | 'chaser_alert'
   | 'level_start'
   | 'level_complete'
   | 'level_fail'
@@ -48,13 +43,8 @@ const SFX_FILES: Record<SfxId, string> = {
   pickup_key: '/audio/sfx/pickup_key.mp3',
   pickup_hourglass: '/audio/sfx/pickup_hourglass.mp3',
   pickup_map: '/audio/sfx/pickup_map.mp3',
-  pickup_dash: '/audio/sfx/pickup_dash.mp3',
   all_keys_collected: '/audio/sfx/all_keys_collected.mp3',
-  door_open: '/audio/sfx/door_open.mp3',
   door_blocked: '/audio/sfx/door_blocked.mp3',
-  portal_enter: '/audio/sfx/portal_enter.mp3',
-  portal_exit: '/audio/sfx/portal_exit.mp3',
-  chaser_alert: '/audio/sfx/chaser_alert.mp3',
   level_start: '/audio/sfx/level_start.mp3',
   level_complete: '/audio/sfx/level_complete.mp3',
   level_fail: '/audio/sfx/level_fail.mp3',
@@ -84,13 +74,8 @@ const SFX_VOLUMES: Partial<Record<SfxId, number>> = {
   pickup_key: 0.7,
   pickup_hourglass: 0.7,
   pickup_map: 0.7,
-  pickup_dash: 0.7,
   all_keys_collected: 0.9,
-  door_open: 0.6,
   door_blocked: 0.6,
-  portal_enter: 0.8,
-  portal_exit: 0.8,
-  chaser_alert: 0.9,
   level_start: 0.7,
   level_complete: 0.9,
   level_fail: 0.8,
@@ -612,7 +597,6 @@ export class AudioManager {
       case 'ui_hover':
         return { type: 'sine', startFreq: 1320, endFreq: 1320, duration: 0.03, gain: 0.15 };
       case 'pickup_key':
-      case 'pickup_dash':
         return { type: 'sine', startFreq: 880, endFreq: 1320, duration: 0.18, gain: 0.4 };
       case 'pickup_hourglass':
         return { type: 'triangle', startFreq: 660, endFreq: 990, duration: 0.22, gain: 0.4 };
@@ -620,16 +604,8 @@ export class AudioManager {
         return { type: 'triangle', startFreq: 520, endFreq: 780, duration: 0.18, gain: 0.35 };
       case 'all_keys_collected':
         return { type: 'sine', startFreq: 660, endFreq: 1320, duration: 0.5, gain: 0.5 };
-      case 'door_open':
-        return { type: 'sawtooth', startFreq: 200, endFreq: 320, duration: 0.3, gain: 0.3 };
       case 'door_blocked':
         return { type: 'square', startFreq: 140, endFreq: 90, duration: 0.18, gain: 0.35 };
-      case 'portal_enter':
-        return { type: 'sine', startFreq: 440, endFreq: 1760, duration: 0.5, gain: 0.5 };
-      case 'portal_exit':
-        return { type: 'sine', startFreq: 1760, endFreq: 440, duration: 0.5, gain: 0.5 };
-      case 'chaser_alert':
-        return { type: 'sawtooth', startFreq: 220, endFreq: 110, duration: 0.4, gain: 0.5 };
       case 'level_start':
         return { type: 'sine', startFreq: 523, endFreq: 784, duration: 0.4, gain: 0.4 };
       case 'level_complete':

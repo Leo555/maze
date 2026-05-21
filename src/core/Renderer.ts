@@ -316,9 +316,6 @@ export class Renderer {
         case 'map_shard':
           this.drawMapShard(ctx, cx, cy + float, cs, theme.accent);
           break;
-        case 'dash_shoes':
-          this.drawDashShoes(ctx, cx, cy + float, cs, theme.accent);
-          break;
         default:
           break;
       }
@@ -406,25 +403,6 @@ export class Renderer {
     ctx.moveTo(-s * 0.1, s * 0.3);
     ctx.lineTo(s * 0.3, -s * 0.1);
     ctx.stroke();
-    ctx.restore();
-  }
-
-  private drawDashShoes(
-    ctx: CanvasRenderingContext2D,
-    cx: number,
-    cy: number,
-    cs: number,
-    color: string
-  ): void {
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(-cs * 0.18, 0);
-    ctx.lineTo(cs * 0.18, -cs * 0.1);
-    ctx.lineTo(cs * 0.18, cs * 0.1);
-    ctx.closePath();
-    ctx.fill();
     ctx.restore();
   }
 

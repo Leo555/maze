@@ -17,15 +17,7 @@ import type { Maze } from '../maze/Generator';
 import type { LevelConfig } from '../config/levels';
 import { createRng, randomSeed, shuffle } from '../core/utils';
 
-export type EntityKind =
-  | 'key'
-  | 'hourglass'
-  | 'map_shard'
-  | 'dash_shoes'
-  | 'one_way_door'
-  | 'portal'
-  | 'moving_wall'
-  | 'chaser';
+export type EntityKind = 'key' | 'hourglass' | 'map_shard';
 
 export interface Entity {
   id: string;
@@ -33,7 +25,6 @@ export interface Entity {
   x: number;
   y: number;
   active: boolean;
-  data?: Record<string, unknown>; // 单向门朝向、传送门配对、移动墙周期等
 }
 
 export interface LevelRuntime {

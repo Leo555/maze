@@ -1,4 +1,5 @@
 import type { ThemeName } from './theme';
+import { clamp } from '../core/utils';
 
 /**
  * 关卡配置
@@ -22,10 +23,6 @@ export interface LevelConfig {
   timeLimit: number; // 倒计时秒，0 = 无限
   hourglasses: number; // 沙漏数量
   mapShards: number; // 地图碎片数量
-  oneWayDoors: number; // 单向门数量
-  portals: number; // 传送门对数
-  movingWalls: number; // 周期开合墙数量
-  chasers: number; // 追逐者数量
 
   bgm: string; // BGM 资源 id
 }
@@ -50,14 +47,6 @@ interface Chapter {
   enableTime: boolean;
   /** 是否使用地图碎片 */
   enableMap: boolean;
-  /** 是否使用单向门 */
-  enableOneWay: boolean;
-  /** 是否使用传送门 */
-  enablePortal: boolean;
-  /** 是否使用移动墙 */
-  enableMovingWall: boolean;
-  /** 是否使用追逐者 */
-  enableChaser: boolean;
 }
 
 const CHAPTERS: Chapter[] = [
@@ -72,10 +61,6 @@ const CHAPTERS: Chapter[] = [
     enableKeys: false,
     enableTime: false,
     enableMap: false,
-    enableOneWay: false,
-    enablePortal: false,
-    enableMovingWall: false,
-    enableChaser: false,
   },
   // 第二章：引入钥匙
   {
@@ -88,10 +73,6 @@ const CHAPTERS: Chapter[] = [
     enableKeys: true,
     enableTime: false,
     enableMap: false,
-    enableOneWay: false,
-    enablePortal: false,
-    enableMovingWall: false,
-    enableChaser: false,
   },
   // 第三章：缩小视野，引入地图碎片
   {
@@ -104,10 +85,6 @@ const CHAPTERS: Chapter[] = [
     enableKeys: true,
     enableTime: false,
     enableMap: true,
-    enableOneWay: false,
-    enablePortal: false,
-    enableMovingWall: false,
-    enableChaser: false,
   },
   // 第四章：引入倒计时
   {
@@ -120,12 +97,8 @@ const CHAPTERS: Chapter[] = [
     enableKeys: true,
     enableTime: true,
     enableMap: true,
-    enableOneWay: false,
-    enablePortal: false,
-    enableMovingWall: false,
-    enableChaser: false,
   },
-  // 第五章：进一步减小视野，引入单向门
+  // 第五章：极光（视野受限）
   {
     index: 5,
     name: '极光',
@@ -136,12 +109,8 @@ const CHAPTERS: Chapter[] = [
     enableKeys: true,
     enableTime: true,
     enableMap: true,
-    enableOneWay: true,
-    enablePortal: false,
-    enableMovingWall: false,
-    enableChaser: false,
   },
-  // 第六章：迷雾（dusk 复访），强化单向门
+  // 第六章：迷雾（dusk 复访）
   {
     index: 6,
     name: '雾境',
@@ -152,12 +121,8 @@ const CHAPTERS: Chapter[] = [
     enableKeys: true,
     enableTime: true,
     enableMap: true,
-    enableOneWay: true,
-    enablePortal: false,
-    enableMovingWall: false,
-    enableChaser: false,
   },
-  // 第七章：传送门
+  // 第七章：虹霓
   {
     index: 7,
     name: '虹霓',
@@ -168,12 +133,8 @@ const CHAPTERS: Chapter[] = [
     enableKeys: true,
     enableTime: true,
     enableMap: true,
-    enableOneWay: true,
-    enablePortal: true,
-    enableMovingWall: false,
-    enableChaser: false,
   },
-  // 第八章：深渊（deep 复访），加入移动墙
+  // 第八章：深渊（deep 复访）
   {
     index: 8,
     name: '深渊',
@@ -184,12 +145,8 @@ const CHAPTERS: Chapter[] = [
     enableKeys: true,
     enableTime: true,
     enableMap: true,
-    enableOneWay: true,
-    enablePortal: true,
-    enableMovingWall: true,
-    enableChaser: false,
   },
-  // 第九章：试炼，全机关
+  // 第九章：试炼
   {
     index: 9,
     name: '试炼',
@@ -200,12 +157,8 @@ const CHAPTERS: Chapter[] = [
     enableKeys: true,
     enableTime: true,
     enableMap: true,
-    enableOneWay: true,
-    enablePortal: true,
-    enableMovingWall: true,
-    enableChaser: false,
   },
-  // 终章：终局，引入追逐者
+  // 终章：终局
   {
     index: 10,
     name: '终局',
@@ -216,10 +169,6 @@ const CHAPTERS: Chapter[] = [
     enableKeys: true,
     enableTime: true,
     enableMap: true,
-    enableOneWay: true,
-    enablePortal: true,
-    enableMovingWall: true,
-    enableChaser: true,
   },
 ];
 
@@ -229,8 +178,6 @@ export const CHAPTER_COUNT = CHAPTERS.length;
 export const LEVELS_PER_CHAPTER = 10;
 /** 总关数 */
 export const TOTAL_LEVELS = CHAPTER_COUNT * LEVELS_PER_CHAPTER; // 100
-
-const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 /**
  * 程序化生成 100 关。
@@ -291,31 +238,6 @@ function buildLevels(): LevelConfig[] {
       mapShards = clamp(Math.floor(size / 12) + (chapter.vision === 'small' ? 1 : 0), 0, 4);
     }
 
-    // ===== 单向门 =====
-    let oneWayDoors = 0;
-    if (chapter.enableOneWay) {
-      oneWayDoors = clamp(2 + Math.floor((idx - 40) / 8) + (isBoss ? 2 : 0), 2, 12);
-    }
-
-    // ===== 传送门 =====
-    let portals = 0;
-    if (chapter.enablePortal) {
-      portals = clamp(1 + Math.floor((idx - 60) / 12) + (isBoss ? 1 : 0), 1, 5);
-    }
-
-    // ===== 移动墙 =====
-    let movingWalls = 0;
-    if (chapter.enableMovingWall) {
-      movingWalls = clamp(2 + Math.floor((idx - 70) / 8) + (isBoss ? 1 : 0), 2, 8);
-    }
-
-    // ===== 追逐者 =====
-    let chasers = 0;
-    if (chapter.enableChaser) {
-      // 仅终章；从 1 → 3
-      chasers = clamp(1 + Math.floor((chapterPos - 1) / 4), 1, 3);
-    }
-
     // ===== 名称 =====
     // 章节名 + 章内编号（1-1, 1-2, ..., 10-10）
     const name = `${chapter.name} ${chapterIdx}-${chapterPos}`;
@@ -332,10 +254,6 @@ function buildLevels(): LevelConfig[] {
       timeLimit,
       hourglasses,
       mapShards,
-      oneWayDoors,
-      portals,
-      movingWalls,
-      chasers,
       bgm: chapter.bgm,
     });
   }
@@ -364,11 +282,6 @@ export function getChapterOf(levelId: number): {
     theme: chapter.theme,
     range: [start, end],
   };
-}
-
-/** 关卡章节内位置 (1..10)；末关 = 10 通常作为「Boss」 */
-export function getChapterPos(levelId: number): number {
-  return ((levelId - 1) % LEVELS_PER_CHAPTER) + 1;
 }
 
 export function getLevel(id: number): LevelConfig {

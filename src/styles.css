@@ -1028,7 +1028,7 @@ body {
   }
 }
 
-/* 横屏窄高度（手机横放）：D-pad 固定右下，小地图与 dash 放左下 */
+/* 横屏窄高度（手机横放）：D-pad 固定右下，小地图放左下 */
 @media (max-height: 500px) and (orientation: landscape) {
   .scene-card {
     padding: 24px 36px;
