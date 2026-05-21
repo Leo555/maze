@@ -2,14 +2,101 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
     <meta name="theme-color" content="#F5EFE6" />
-    <title>晨雾迷径</title>
+
+    <!--
+      SEO 基础：标题 + 描述 + 关键词
+      标题尽量包含主关键词在前 30 字符内，便于搜索引擎截断后仍命中
+    -->
+    <title>晨雾迷径 · 100 关迷宫解谜益智游戏 | 在线免费玩</title>
+    <meta
+      name="description"
+      content="晨雾迷径是一款唯美风格的浏览器迷宫游戏，包含 10 章节 100 个关卡的益智解谜挑战。穿越迷雾、收集钥匙、解锁路径，挑战最佳通关步数与三星记录，无需下载，打开即玩。"
+    />
+    <meta
+      name="keywords"
+      content="迷宫游戏,迷宫解谜,益智游戏,解谜游戏,在线迷宫,浏览器游戏,H5 小游戏,迷雾迷宫,晨雾迷径,maze game,puzzle game,brain game"
+    />
+    <meta name="author" content="晨雾迷径 (Misty Path Dawn)" />
+    <meta name="robots" content="index,follow,max-image-preview:large" />
+    <meta name="googlebot" content="index,follow" />
+    <link rel="canonical" href="https://maze.example.com/" />
+
+    <!-- 移动端 Web App 体验 -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="晨雾迷径" />
+    <meta name="format-detection" content="telephone=no" />
+
+    <!-- 图标 -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+
+    <!--
+      Open Graph（微信/朋友圈/Facebook/LinkedIn 等社交分享卡片）
+      注意：og:image 必须是绝对 URL，建议尺寸 1200×630
+    -->
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="zh_CN" />
+    <meta property="og:site_name" content="晨雾迷径" />
+    <meta property="og:title" content="晨雾迷径 · 100 关迷宫解谜益智游戏" />
+    <meta
+      property="og:description"
+      content="一款唯美的浏览器迷宫游戏，10 章节 100 关，收集钥匙、穿越迷雾，挑战最佳通关步数。"
+    />
+    <meta property="og:url" content="https://maze.example.com/" />
+    <meta property="og:image" content="https://maze.example.com/favicon.svg" />
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="晨雾迷径 · 100 关迷宫解谜益智游戏" />
+    <meta
+      name="twitter:description"
+      content="唯美迷宫解谜游戏，100 关章节挑战，浏览器免费畅玩。"
+    />
+    <meta name="twitter:image" content="https://maze.example.com/favicon.svg" />
+
+    <!--
+      结构化数据（JSON-LD）：声明这是一款 VideoGame
+      Google 可据此在搜索结果中显示更丰富的卡片
+    -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "VideoGame",
+        "name": "晨雾迷径",
+        "alternateName": "Misty Path Dawn",
+        "url": "https://maze.example.com/",
+        "image": "https://maze.example.com/favicon.svg",
+        "description": "唯美风格的浏览器迷宫解谜游戏，含 10 章节 100 关，挑战最佳通关步数与三星评级。",
+        "genre": ["Puzzle", "Maze", "Casual"],
+        "inLanguage": "zh-CN",
+        "applicationCategory": "Game",
+        "operatingSystem": "Any (Web Browser)",
+        "gamePlatform": "Web Browser",
+        "playMode": "SinglePlayer",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "CNY",
+          "availability": "https://schema.org/InStock"
+        }
+      }
+    </script>
   </head>
   <body>
+    <!-- 给搜索引擎与禁用 JS 的访客一段可读的 HTML 文本，提升页面"内容质量"信号 -->
+    <noscript>
+      <h1>晨雾迷径 · 迷宫解谜游戏</h1>
+      <p>
+        这是一款基于 HTML5 Canvas 的浏览器迷宫游戏，包含 10 章节 100
+        个关卡。请启用 JavaScript 后刷新本页面开始游戏。
+      </p>
+    </noscript>
+
     <div id="app">
-      <canvas id="game-canvas"></canvas>
+      <canvas id="game-canvas" aria-label="迷宫游戏主画面"></canvas>
       <div id="hud"></div>
       <div id="overlay"></div>
     </div>
