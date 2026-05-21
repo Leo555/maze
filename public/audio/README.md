@@ -83,6 +83,12 @@ public/audio/
 1. 下载/制作音频文件
 2. 重命名为表格中的文件名
 3. 放入对应目录（`public/audio/sfx/` 或 `public/audio/bgm/`）
-4. 刷新浏览器即可生效（Howler.js 会自动加载）
+4. **启用文件加载开关**：在项目根目录创建 `.env.local`（或 `.env`），添加：
+   ```
+   VITE_AUDIO_ENABLED=true
+   ```
+5. 重启 `pnpm dev` / 刷新浏览器即可生效（Howler.js 会自动加载）
 
-> 任何缺失的音频文件，游戏会自动 fallback 到 Web Audio 合成的简单音效，不会报错。
+> **为什么需要开关？** 默认情况下（`VITE_AUDIO_ENABLED` 未设置或为 `false`），SFX 全部走 Web Audio 程序化合成，BGM 静默。这样既能"开箱即玩"，又避免在 mp3 未补齐时产生大量 404 请求污染 Network 面板。
+>
+> 当开关开启后，任何缺失的 SFX 文件仍会自动 fallback 到合成音效，不会报错（仅会在控制台看到 Howler 的加载失败提示）。

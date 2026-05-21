@@ -118,6 +118,29 @@ interface AudioSettings {
 
 const STORAGE_KEY = 'maze_audio_settings';
 
+/**
+ * 是否启用本地音频文件加载。
+ *
+ * 默认关闭：项目采用「代码先行 + 资源后置」策略，public/audio/ 下的
+ * mp3 文件需要后期补齐，未补齐前直接加载会产生大量 404，污染 Network 面板。
+ *
+ * 启用方法：
+ *   1) 把真实 mp3 放入 public/audio/{sfx,bgm}/
+ *   2) 在 .env 或 .env.production 中设置 VITE_AUDIO_ENABLED=true
+ *
+ * 关闭时所有 SFX 走 synthFallback（程序化合成），BGM 直接静默。
+ */
+const AUDIO_FILES_ENABLED: boolean = (() => {
+  try {
+    // Vite: import.meta.env.VITE_AUDIO_ENABLED
+    const env = (import.meta as unknown as { env?: Record<string, string> }).env;
+    const v = env?.VITE_AUDIO_ENABLED;
+    return v === 'true' || v === '1';
+  } catch {
+    return false;
+  }
+})();
+
 export class AudioManager {
   private sfxPool: Partial<Record<SfxId, Howl>> = {};
   private currentBgm: Howl | null = null;
@@ -213,6 +236,8 @@ export class AudioManager {
 
   // ============ SFX ============
   private getSfx(id: SfxId): Howl | null {
+    // 资源未启用：跳过文件加载，由 synthFallback 处理
+    if (!AUDIO_FILES_ENABLED) return null;
     if (this.sfxPool[id]) return this.sfxPool[id]!;
     try {
       const howl = new Howl({
@@ -251,6 +276,8 @@ export class AudioManager {
 
   // ============ BGM ============
   playBgm(id: BgmId, fadeIn = 800): void {
+    // 资源未启用：BGM 不做合成（合成长循环成本高、效果差），直接静默
+    if (!AUDIO_FILES_ENABLED) return;
     if (this.currentBgmId === id && this.currentBgm?.playing()) return;
     this.stopBgm(fadeIn);
 
