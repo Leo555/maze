@@ -20,10 +20,7 @@
  */
 :root {
   --bg: #f5efe6;
-  --bg-soft: #ece4d3;
-  --surface: rgba(255, 255, 255, 0.6);
   --surface-strong: rgba(255, 255, 255, 0.8);
-  --surface-hover: rgba(255, 255, 255, 0.9);
   --border: rgba(58, 52, 43, 0.18);
   --border-strong: rgba(58, 52, 43, 0.32);
   --text: #2a241c;
@@ -670,14 +667,6 @@ body {
   text-align: right;
   font-variant-numeric: tabular-nums;
   color: var(--text);
-}
-
-/* 主菜单背景动画装饰 */
-.menu-deco {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  overflow: hidden;
 }
 
 /* Toast 提示 */

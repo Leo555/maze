@@ -2,12 +2,14 @@
  * 音频管理器
  *
  * 策略：「代码先行 + 资源后置」
- *   - 所有音效用 Howler.js 加载本地文件
- *   - 缺失文件时静默回退（用 Web Audio 程序化合成简单音效）
- *   - 用户可在 assets/audio/README.md 中查看每个 id 应放什么文件
+ *   - SFX 默认通过 Web Audio API 程序化合成（无外部依赖）
+ *   - 当 VITE_AUDIO_ENABLED=true 且 mp3 资源就绪时，按需动态加载 Howler 走真实音频
+ *   - 默认构建中 Howler **完全不被打包**（dynamic import，treeshake 友好）
+ *
+ * 体积对比：
+ *   - 开启前（默认）：bundle 不含 Howler，~36KB（min）开销直接消失
+ *   - 开启后：首次播放音效时按需加载 howler chunk
  */
-
-import { Howl, Howler } from 'howler';
 
 export type SfxId =
   | 'step'
@@ -98,7 +100,7 @@ interface AudioSettings {
 const STORAGE_KEY = 'maze_audio_settings';
 
 /**
- * 是否启用本地音频文件加载。
+ * 是否启用本地音频文件加载（编译期常量，由 vite.config.ts 的 define 注入）。
  *
  * 默认关闭：项目采用「代码先行 + 资源后置」策略，public/audio/ 下的
  * mp3 文件需要后期补齐，未补齐前直接加载会产生大量 404，污染 Network 面板。
@@ -107,22 +109,28 @@ const STORAGE_KEY = 'maze_audio_settings';
  *   1) 把真实 mp3 放入 public/audio/{sfx,bgm}/
  *   2) 在 .env 或 .env.production 中设置 VITE_AUDIO_ENABLED=true
  *
- * 关闭时所有 SFX 走 synthFallback（程序化合成），BGM 直接静默。
+ * 关键体积优化：__AUDIO_ENABLED__ 在编译期被替换为 true/false 字面量后，
+ * `if (!__AUDIO_ENABLED__)` 这种分支会被 esbuild 完全 DCE 掉，
+ * 连 dynamic import('howler') 都不会出现在产物中——howler chunk 不再生成。
  */
-const AUDIO_FILES_ENABLED: boolean = (() => {
-  try {
-    // Vite: import.meta.env.VITE_AUDIO_ENABLED
-    const env = (import.meta as unknown as { env?: Record<string, string> }).env;
-    const v = env?.VITE_AUDIO_ENABLED;
-    return v === 'true' || v === '1';
-  } catch {
-    return false;
+const AUDIO_FILES_ENABLED = __AUDIO_ENABLED__;
+
+// === Howler 模块的延迟加载 ===
+// 仅在 AUDIO_FILES_ENABLED 时才会真正 import('howler')，否则不引入到 bundle。
+type HowlerModule = typeof import('howler');
+type HowlInstance = InstanceType<HowlerModule['Howl']>;
+let howlerPromise: Promise<HowlerModule | null> | null = null;
+function loadHowler(): Promise<HowlerModule | null> {
+  if (!AUDIO_FILES_ENABLED) return Promise.resolve(null);
+  if (!howlerPromise) {
+    howlerPromise = import('howler').catch(() => null);
   }
-})();
+  return howlerPromise;
+}
 
 export class AudioManager {
-  private sfxPool: Partial<Record<SfxId, Howl>> = {};
-  private currentBgm: Howl | null = null;
+  private sfxPool: Partial<Record<SfxId, HowlInstance>> = {};
+  private currentBgm: HowlInstance | null = null;
   private currentBgmId: BgmId | null = null;
   private synthCtx: AudioContext | null = null;
   private settings: AudioSettings = {
@@ -173,8 +181,10 @@ export class AudioManager {
   }
 
   private applyMaster(): void {
+    if (!AUDIO_FILES_ENABLED) return;
     const m = this.settings.muted ? 0 : this.settings.master;
-    Howler.volume(m);
+    // 已加载的 howler 才需要同步 master volume；否则等加载好后由 setMaster 再次触发
+    void loadHowler().then((mod) => mod?.Howler.volume(m));
   }
 
   getSettings(): Readonly<AudioSettings> {
@@ -214,18 +224,22 @@ export class AudioManager {
   }
 
   // ============ SFX ============
-  private getSfx(id: SfxId): Howl | null {
-    // 资源未启用：跳过文件加载，由 synthFallback 处理
+  /**
+   * 异步获取 howler 实例（仅在 AUDIO_FILES_ENABLED 时调用）。
+   * 缺失文件由 onloaderror 静默处理，调用方继续走 synth fallback。
+   */
+  private async getSfx(id: SfxId): Promise<HowlInstance | null> {
     if (!AUDIO_FILES_ENABLED) return null;
     if (this.sfxPool[id]) return this.sfxPool[id]!;
+    const mod = await loadHowler();
+    if (!mod) return null;
     try {
-      const howl = new Howl({
+      const howl = new mod.Howl({
         src: [SFX_FILES[id]],
         volume: SFX_VOLUMES[id] ?? 0.6,
         preload: true,
-        // 资源缺失：onloaderror 时不抛错，由 fallback 处理
         onloaderror: () => {
-          // 文件未提供，标记为 null（后续走 synth fallback）
+          // 文件未提供，标记为 undefined（后续走 synth fallback）
           this.sfxPool[id] = undefined;
         },
       });
@@ -238,18 +252,23 @@ export class AudioManager {
 
   playSfx(id: SfxId, options?: { volume?: number; rate?: number }): void {
     if (this.settings.muted) return;
-    const howl = this.getSfx(id);
     const sfxVol = (SFX_VOLUMES[id] ?? 0.6) * this.settings.sfx;
     const finalVol = (options?.volume ?? 1) * sfxVol;
 
-    if (howl && howl.state() === 'loaded') {
-      const sid = howl.play();
-      howl.volume(finalVol, sid);
-      if (options?.rate !== undefined) howl.rate(options.rate, sid);
-      return;
+    if (AUDIO_FILES_ENABLED) {
+      // 已加载且就绪 → 直接播；否则走 synth（避免首帧延迟感）
+      const cached = this.sfxPool[id];
+      if (cached && cached.state() === 'loaded') {
+        const sid = cached.play();
+        cached.volume(finalVol, sid);
+        if (options?.rate !== undefined) cached.rate(options.rate, sid);
+        return;
+      }
+      // 异步触发加载（下次播放就能用真实音频）
+      void this.getSfx(id);
     }
 
-    // 文件未加载好/不存在 → 程序化合成
+    // 文件未启用 / 未加载好 / 不存在 → 程序化合成
     this.synthFallback(id, finalVol, options?.rate ?? 1);
   }
 
@@ -260,22 +279,25 @@ export class AudioManager {
     if (this.currentBgmId === id && this.currentBgm?.playing()) return;
     this.stopBgm(fadeIn);
 
-    let bgm: Howl;
-    try {
-      bgm = new Howl({
-        src: [BGM_FILES[id]],
-        loop: true,
-        volume: 0,
-        html5: true, // 流式播放，减少内存占用
-      });
-    } catch {
-      return;
-    }
+    void loadHowler().then((mod) => {
+      if (!mod) return;
+      let bgm: HowlInstance;
+      try {
+        bgm = new mod.Howl({
+          src: [BGM_FILES[id]],
+          loop: true,
+          volume: 0,
+          html5: true, // 流式播放，减少内存占用
+        });
+      } catch {
+        return;
+      }
 
-    this.currentBgm = bgm;
-    this.currentBgmId = id;
-    bgm.play();
-    bgm.fade(0, this.bgmEffective(), fadeIn);
+      this.currentBgm = bgm;
+      this.currentBgmId = id;
+      bgm.play();
+      bgm.fade(0, this.bgmEffective(), fadeIn);
+    });
   }
 
   stopBgm(fadeOut = 600): void {
