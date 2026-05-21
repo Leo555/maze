@@ -263,10 +263,20 @@ export class Hud {
     }
   }
 
+  /** Toast 自动隐藏的 timer 句柄；重复 showToast 会先取消上一次以避免被提前关掉 */
+  private toastTimer: number | null = null;
+
   showToast(text: string, duration = 1600): void {
+    if (this.toastTimer !== null) {
+      clearTimeout(this.toastTimer);
+      this.toastTimer = null;
+    }
     this.toastEl.textContent = text;
     this.toastEl.classList.add('show');
-    setTimeout(() => this.toastEl.classList.remove('show'), duration);
+    this.toastTimer = window.setTimeout(() => {
+      this.toastEl.classList.remove('show');
+      this.toastTimer = null;
+    }, duration);
   }
 
   /** 显示「关闭最佳路径」按钮（彩蛋触发后由 Game 调用） */

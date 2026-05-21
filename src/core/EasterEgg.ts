@@ -24,8 +24,13 @@ import {
 /** 彩蛋触发参数 */
 const TARGET_CLICKS = 10;
 const WINDOW_MS = 8000;
-/** 右上角触发热区尺寸（px） */
-const HOTSPOT = 100;
+/**
+ * 右上角触发热区尺寸（px）。
+ * 取得「足够大让玩家容易撞到」与「不至于干扰主玩法」的平衡：
+ *   - 200 在多数桌面/平板上覆盖右上角整个 HUD 区域
+ *   - 移动端的 100×100 hint 也会被 200 覆盖
+ */
+const HOTSPOT = 200;
 
 /**
  * 宿主接口：彩蛋仅在「正在游玩」时才有效。
@@ -52,7 +57,7 @@ export class EasterEgg {
    * 监听 window pointerdown（capture）：
    *   - 命中右上角热区 → 滑动窗口计数
    *   - 达到目标 → 触发显示最佳路径
-   *   - 过半 → 给进度提示让玩家知道彩蛋存在
+   *   - 多档进度提示让玩家明确意识到"自己正在触发某个东西"
    */
   install(): void {
     const handler = (e: PointerEvent): void => {
@@ -72,14 +77,34 @@ export class EasterEgg {
         this.trigger();
         return;
       }
-      if (count >= Math.floor(TARGET_CLICKS / 2)) {
-        const remain = TARGET_CLICKS - count;
-        this.host.getHud().showToast(`再点 ${remain} 次解锁彩蛋`, 800);
-      }
+
+      // 进度提示：多档反馈，让玩家知道彩蛋存在并知道还差几次
+      //   - 第 3 次：首次提示"发现热区"，让玩家意识到「右上角连点有意义」
+      //   - 第 5+ 次（过半）：每次都给倒计提示，重复点击立即覆盖之前的 toast
+      //   - 第 8+ 次（临门一脚）：用 ✨ 增强紧迫感
+      this.showProgressToast(count);
     };
     window.addEventListener('pointerdown', handler, { capture: true });
     this.removeListener = () =>
       window.removeEventListener('pointerdown', handler, { capture: true });
+  }
+
+  private showProgressToast(count: number): void {
+    const remain = TARGET_CLICKS - count;
+    const hud = this.host.getHud();
+    if (count === 3) {
+      hud.showToast('发现隐藏热区 · 继续连点试试看', 1200);
+      return;
+    }
+    if (count >= TARGET_CLICKS - 2) {
+      // 临门一脚：8 / 9 次时强提示
+      hud.showToast(`✨ 还差 ${remain} 次！`, 900);
+      return;
+    }
+    if (count >= Math.floor(TARGET_CLICKS / 2)) {
+      // 过半（5、6、7 次）：每次都给倒计提示
+      hud.showToast(`再点 ${remain} 次解锁彩蛋`, 800);
+    }
   }
 
   destroy(): void {
