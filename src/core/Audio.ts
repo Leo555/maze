@@ -12,8 +12,6 @@ import { Howl, Howler } from 'howler';
 export type SfxId =
   | 'step'
   | 'bump'
-  | 'dash'
-  | 'dash_ready'
   | 'pickup_key'
   | 'pickup_hourglass'
   | 'pickup_map'
@@ -47,8 +45,6 @@ export type BgmId =
 const SFX_FILES: Record<SfxId, string> = {
   step: '/audio/sfx/step.mp3',
   bump: '/audio/sfx/bump.mp3',
-  dash: '/audio/sfx/dash.mp3',
-  dash_ready: '/audio/sfx/dash_ready.mp3',
   pickup_key: '/audio/sfx/pickup_key.mp3',
   pickup_hourglass: '/audio/sfx/pickup_hourglass.mp3',
   pickup_map: '/audio/sfx/pickup_map.mp3',
@@ -85,8 +81,6 @@ const BGM_FILES: Record<BgmId, string> = {
 const SFX_VOLUMES: Partial<Record<SfxId, number>> = {
   step: 0.3,
   bump: 0.5,
-  dash: 0.6,
-  dash_ready: 0.4,
   pickup_key: 0.7,
   pickup_hourglass: 0.7,
   pickup_map: 0.7,
@@ -613,9 +607,6 @@ export class AudioManager {
         return { type: 'triangle', startFreq: 220, endFreq: 180, duration: 0.05, gain: 0.15 };
       case 'bump':
         return { type: 'sine', startFreq: 110, endFreq: 60, duration: 0.18, gain: 0.4 };
-      case 'dash':
-        return { type: 'sawtooth', startFreq: 400, endFreq: 800, duration: 0.18, gain: 0.25 };
-      case 'dash_ready':
       case 'ui_click':
         return { type: 'sine', startFreq: 880, endFreq: 880, duration: 0.06, gain: 0.3 };
       case 'ui_hover':

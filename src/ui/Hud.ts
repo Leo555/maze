@@ -16,11 +16,10 @@ export interface HudData {
   isCountdown: boolean;
   keysCollected: number;
   keysTotal: number;
-  dashCooldownRatio: number; // 0~1
   muted: boolean;
 }
 
-/** 是否触屏设备：用于决定是否渲染虚拟方向键 / Dash 按钮 */
+/** 是否触屏设备：用于决定是否渲染虚拟方向键 */
 function isTouchDevice(): boolean {
   return (
     typeof window !== 'undefined' &&
@@ -56,12 +55,9 @@ export class Hud {
   private topBar!: HTMLElement;
   private timerEl!: HTMLElement;
   private keysEl!: HTMLElement;
-  private dashFill!: HTMLElement;
   private muteBtn!: HTMLElement;
   private minimapContainer!: HTMLElement;
   private toastEl!: HTMLElement;
-  private dashBtn: HTMLButtonElement | null = null;
-  private dashRing: HTMLElement | null = null;
   private bestPathBtn: HTMLButtonElement | null = null;
 
   onMuteToggle: (() => void) | null = null;
@@ -69,7 +65,6 @@ export class Hud {
   /** 触屏方向键：按下/松开 */
   onTouchDirStart: ((dir: Direction) => void) | null = null;
   onTouchDirEnd: ((dir: Direction) => void) | null = null;
-  onDashTap: (() => void) | null = null;
   /** 彩蛋：用户点击「关闭最佳路径」按钮 */
   onCloseBestPath: (() => void) | null = null;
 
@@ -93,20 +88,9 @@ export class Hud {
     this.keysEl = document.createElement('div');
     this.keysEl.className = 'item keys';
     this.keysEl.innerHTML = `<span class="icon">🔑</span><span class="value">0/0</span>`;
-    const dashItem = document.createElement('div');
-    dashItem.className = 'item';
-    dashItem.innerHTML = `<span class="icon">⚡</span>`;
-    const dashBar = document.createElement('div');
-    dashBar.className = 'dash-bar';
-    this.dashFill = document.createElement('div');
-    this.dashFill.className = 'fill';
-    this.dashFill.style.width = '100%';
-    dashBar.appendChild(this.dashFill);
-    dashItem.appendChild(dashBar);
 
     this.topBar.appendChild(this.timerEl);
     this.topBar.appendChild(this.keysEl);
-    this.topBar.appendChild(dashItem);
     this.root.appendChild(this.topBar);
 
     // 右上按钮组
@@ -148,7 +132,7 @@ export class Hud {
     });
     this.root.appendChild(this.bestPathBtn);
 
-    // 触屏设备：构建虚拟方向键 + 冲刺按钮
+    // 触屏设备：构建虚拟方向键
     if (this.isTouch) {
       // 加 class，让 CSS 调整 minimap 等元素位置（避免与右下 D-pad 重叠）
       this.root.classList.add('has-touch-pad');
@@ -158,10 +142,9 @@ export class Hud {
 
   /**
    * 移动端虚拟控制：
-   *   - 左下「十字 D-pad」：上 / 下 / 左 / 右 四个圆角按钮
+   *   - 右下「十字 D-pad」：上 / 下 / 左 / 右 四个圆角按钮
    *     · pointerdown 触发 onTouchDirStart（开始连续移动）
    *     · pointerup / pointercancel / pointerleave 触发 onTouchDirEnd
-   *   - 右下「冲刺按钮」：tap 触发 onDashTap（与键盘 Shift 等价）
    */
   private buildTouchControls(): void {
     const pad = document.createElement('div');
@@ -199,29 +182,6 @@ export class Hud {
     pad.appendChild(mkBtn('right', '→', 'right'));
     pad.appendChild(mkBtn('down', '↓', 'down'));
     this.root.appendChild(pad);
-
-    // 冲刺按钮
-    const dash = document.createElement('button');
-    dash.className = 'touch-dash';
-    dash.type = 'button';
-    dash.setAttribute('aria-label', '冲刺');
-    dash.innerHTML = `<span class="ring"></span><span class="icon">⚡</span>`;
-    dash.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      dash.classList.add('active');
-    });
-    const release = () => dash.classList.remove('active');
-    dash.addEventListener('pointerup', (e) => {
-      e.preventDefault();
-      release();
-      this.onDashTap?.();
-    });
-    dash.addEventListener('pointercancel', release);
-    dash.addEventListener('pointerleave', release);
-    dash.addEventListener('click', (e) => e.preventDefault());
-    this.root.appendChild(dash);
-    this.dashBtn = dash;
-    this.dashRing = dash.querySelector('.ring');
   }
 
   getMinimapContainer(): HTMLElement {
@@ -258,15 +218,6 @@ export class Hud {
       this.keysEl.style.display = 'none';
     }
 
-    // 冲刺冷却
-    const ratio = Math.round(data.dashCooldownRatio * 100);
-    this.dashFill.style.width = `${ratio}%`;
-    if (this.dashBtn && this.dashRing) {
-      // 用 conic-gradient 模拟环形进度
-      this.dashRing.style.background = `conic-gradient(var(--accent, #e8a87c) ${ratio * 3.6}deg, rgba(255,255,255,0.12) 0deg)`;
-      this.dashBtn.classList.toggle('ready', ratio >= 100);
-    }
-
     // 静音
     this.muteBtn.textContent = data.muted ? '🔇' : '🔊';
   }
@@ -297,8 +248,6 @@ export class Hud {
 
   destroy(): void {
     this.root.innerHTML = '';
-    this.dashBtn = null;
-    this.dashRing = null;
     this.bestPathBtn = null;
   }
 }

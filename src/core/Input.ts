@@ -6,7 +6,6 @@ export type Direction = 'up' | 'down' | 'left' | 'right';
 
 type Listener = {
   onDirection?: (dir: Direction) => void;
-  onDash?: () => void;
   onPause?: () => void;
 };
 
@@ -49,10 +48,6 @@ export class InputManager {
     return null;
   }
 
-  isDashing(): boolean {
-    return this.keys.has('shift');
-  }
-
   private onKeyDown = (e: KeyboardEvent) => {
     const k = e.key.toLowerCase();
     if (
@@ -81,8 +76,6 @@ export class InputManager {
 
     if (dir) {
       this.emitDirection(dir);
-    } else if (k === 'shift') {
-      this.listeners.forEach((l) => l.onDash?.());
     } else if (k === 'escape' || k === 'p') {
       this.listeners.forEach((l) => l.onPause?.());
     }

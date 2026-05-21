@@ -102,7 +102,6 @@ export class Game {
     this.hud.onTouchDirEnd = (dir) => {
       if (this.touchHeldDir === dir) this.touchHeldDir = null;
     };
-    this.hud.onDashTap = () => this.tryDash();
 
     this.hud.hide();
 
@@ -111,7 +110,6 @@ export class Game {
         if (this.state === 'playing') this.pause();
         else if (this.state === 'paused') this.resume();
       },
-      onDash: () => this.tryDash(),
       // 触屏滑动 / 单次方向键按下事件：立即尝试一次移动
       // （键盘按住的连续移动由主循环 currentDirection() 处理，二者互不冲突）
       onDirection: (dir) => {
@@ -403,9 +401,6 @@ export class Game {
     if (!this.level) return;
     this.renderer.markVisited(x, y);
 
-    // 玩家在冲刺中，扣掉一步配额
-    this.player?.consumeDashStep();
-
     // 检查是否拾取到道具
     for (const e of this.level.entities) {
       if (e.active && e.x === x && e.y === y) {
@@ -465,13 +460,6 @@ export class Game {
         break;
     }
     this.refreshHud();
-  }
-
-  private tryDash(): void {
-    if (!this.player) return;
-    if (this.player.triggerDash()) {
-      audio.playSfx('dash');
-    }
   }
 
   // ============ 通关 / 失败 ============
@@ -723,7 +711,6 @@ export class Game {
       isCountdown: this.level.config.timeLimit > 0,
       keysCollected: this.keysCollected,
       keysTotal: this.level.config.keys,
-      dashCooldownRatio: this.player.getDashCooldownRatio(),
       muted: audio.isMuted(),
     });
   }

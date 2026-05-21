@@ -46,10 +46,6 @@ export class Player {
   private toY = 0;
   private progress = 0;
   private stepDuration = 0.15; // 秒
-  private dashCooldown = 0; // 剩余冷却秒
-  private dashCooldownMax = 3;
-  private dashing = false;
-  private dashStepsLeft = 0;
   // 移动事件回调
   onArrive: ((gx: number, gy: number) => void) | null = null;
   onBump: ((dir: string) => void) | null = null;
@@ -70,10 +66,6 @@ export class Player {
 
   isIdle(): boolean {
     return !this.state.moving;
-  }
-
-  getDashCooldownRatio(): number {
-    return 1 - this.dashCooldown / this.dashCooldownMax;
   }
 
   tryMove(maze: Maze, dir: 'up' | 'down' | 'left' | 'right'): boolean {
@@ -100,35 +92,9 @@ export class Player {
     return true;
   }
 
-  triggerDash(): boolean {
-    if (this.dashCooldown > 0) return false;
-    this.dashCooldown = this.dashCooldownMax;
-    this.dashing = true;
-    this.dashStepsLeft = 4; // 短冲刺：连续快速 4 步
-    return true;
-  }
-
-  /** 是否处于冲刺中（可让外部加速持续按住的方向） */
-  isDashing(): boolean {
-    return this.dashing && this.dashStepsLeft > 0;
-  }
-
-  consumeDashStep(): void {
-    if (this.dashStepsLeft > 0) this.dashStepsLeft--;
-    if (this.dashStepsLeft <= 0) this.dashing = false;
-  }
-
-  /** 当前每步耗时（冲刺时缩短） */
-  currentStepDuration(): number {
-    return this.dashing ? this.stepDuration * 0.55 : this.stepDuration;
-  }
-
   update(dt: number): void {
-    if (this.dashCooldown > 0) {
-      this.dashCooldown = Math.max(0, this.dashCooldown - dt);
-    }
     if (!this.state.moving) return;
-    this.progress += dt / this.currentStepDuration();
+    this.progress += dt / this.stepDuration;
     if (this.progress >= 1) {
       this.progress = 1;
       this.state.gx = this.toX;

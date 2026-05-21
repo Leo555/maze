@@ -185,21 +185,6 @@ body {
   transform: scale(0.94);
 }
 
-/* 冲刺冷却条 */
-.dash-bar {
-  width: 60px;
-  height: 4px;
-  background: rgba(58, 52, 43, 0.12);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.dash-bar .fill {
-  height: 100%;
-  background: var(--accent);
-  transition: width 0.1s linear;
-}
-
 /* 小地图容器 */
 .minimap {
   position: absolute;
@@ -235,24 +220,14 @@ body {
 .hud-dark-theme .hud-btn:hover {
   background: rgba(13, 17, 23, 0.75);
 }
-.hud-dark-theme .dash-bar {
-  background: rgba(255, 255, 255, 0.18);
-}
 .hud-dark-theme .toast {
   background: rgba(13, 17, 23, 0.7);
   border-color: rgba(255, 255, 255, 0.12);
   color: var(--hud-fg, #f5efe6);
 }
-.hud-dark-theme .touch-dir,
-.hud-dark-theme .touch-dash {
+.hud-dark-theme .touch-dir {
   background: rgba(13, 17, 23, 0.55);
   border-color: rgba(255, 255, 255, 0.14);
-}
-.hud-dark-theme .touch-dash .ring {
-  background: conic-gradient(
-    var(--accent) 0deg,
-    rgba(255, 255, 255, 0.14) 0deg
-  );
 }
 
 /* ========== 浮层 / 弹窗 ========== */
@@ -871,69 +846,6 @@ body {
   grid-row: 3;
 }
 
-/* 冲刺按钮：左下角小地图上方，便于左手拇指点击 */
-.touch-dash {
-  position: absolute;
-  left: calc(24px + env(safe-area-inset-left));
-  /* 默认在小地图(140px)上方 + 间隔 24px */
-  bottom: calc(180px + env(safe-area-inset-bottom));
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid var(--border);
-  color: var(--hud-fg, var(--text));
-  cursor: pointer;
-  font-family: inherit;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
-  z-index: 12;
-  touch-action: none;
-  user-select: none;
-  transition: transform 0.1s ease;
-  filter: drop-shadow(0 6px 20px rgba(74, 60, 42, 0.15));
-}
-
-.touch-dash .ring {
-  position: absolute;
-  inset: 4px;
-  border-radius: 50%;
-  /* update() 中通过 conic-gradient 设置进度 */
-  background: conic-gradient(
-    var(--accent) 0deg,
-    rgba(58, 52, 43, 0.12) 0deg
-  );
-  /* 中心镂空形成环形 */
-  -webkit-mask: radial-gradient(circle, transparent 56%, #000 58%);
-  mask: radial-gradient(circle, transparent 56%, #000 58%);
-}
-
-.touch-dash .icon {
-  position: relative;
-  font-size: 22px;
-  z-index: 1;
-  opacity: 0.65;
-  transition: opacity 0.2s ease, text-shadow 0.2s ease;
-}
-
-.touch-dash.ready .icon {
-  opacity: 1;
-  color: var(--accent-strong);
-  text-shadow: 0 0 12px rgba(232, 168, 124, 0.5);
-}
-
-.touch-dash.active {
-  transform: scale(0.92);
-}
-
-.touch-dash:not(.ready) {
-  /* 冷却中：禁用感 */
-  opacity: 0.75;
-}
-
 /* 响应式 */
 @media (max-width: 600px) {
   .scene-card {
@@ -1024,9 +936,6 @@ body {
   .hud-top .icon {
     font-size: 13px;
   }
-  .dash-bar {
-    width: 44px;
-  }
   .hud-corner {
     top: calc(10px + env(safe-area-inset-top));
     right: calc(10px + env(safe-area-inset-right));
@@ -1077,16 +986,6 @@ body {
     font-size: 20px;
     border-radius: 12px;
   }
-  .touch-dash {
-    width: 64px;
-    height: 64px;
-    /* 小地图(96px) + 间距 ≈ 124px */
-    bottom: calc(124px + env(safe-area-inset-bottom));
-    left: calc(20px + env(safe-area-inset-left));
-  }
-  .touch-dash .icon {
-    font-size: 20px;
-  }
 }
 
 @media (max-width: 380px) {
@@ -1127,12 +1026,6 @@ body {
     height: 46px;
     font-size: 18px;
   }
-  .touch-dash {
-    width: 58px;
-    height: 58px;
-    /* 小地图(80px) + 间距 ≈ 108px */
-    bottom: calc(108px + env(safe-area-inset-bottom));
-  }
 }
 
 /* 横屏窄高度（手机横放）：D-pad 固定右下，小地图与 dash 放左下 */
@@ -1170,12 +1063,5 @@ body {
     width: 48px;
     height: 48px;
     font-size: 18px;
-  }
-  /* 横屏：dash 放在左下小地图右侧 */
-  .touch-dash {
-    width: 56px;
-    height: 56px;
-    bottom: calc(20px + env(safe-area-inset-bottom));
-    left: calc(130px + env(safe-area-inset-left));
   }
 }
