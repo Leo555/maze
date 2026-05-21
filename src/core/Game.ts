@@ -19,6 +19,7 @@ import { getLevel, levels } from '../config/levels';
 import type { LevelConfig } from '../config/levels';
 import { buildLevel } from '../maze/LevelBuilder';
 import type { LevelRuntime, Entity } from '../maze/LevelBuilder';
+import { shortestPath, shortestPathThroughWaypoints } from '../maze/Generator';
 import { Player } from '../entities/Player';
 import { ParticleSystem } from '../fx/Particles';
 import { Hud } from '../ui/Hud';
@@ -66,6 +67,13 @@ export class Game {
   private rafId: number | null = null;
   private lastTime = 0;
 
+  // 彩蛋：右上角连点 10 次显示最佳路径
+  // 时间窗：8 秒内连点累计；过半（≥5）时给出进度提示
+  private easterEggClicks: number[] = [];
+  private static readonly EASTER_EGG_TARGET = 10;
+  private static readonly EASTER_EGG_WINDOW_MS = 8000;
+  private static readonly EASTER_EGG_HOTSPOT = 100; // 右上角 100×100 触发区
+
   constructor() {
     const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
     const hudRoot = document.getElementById('hud') as HTMLElement;
@@ -78,6 +86,9 @@ export class Game {
       this.refreshHud();
     };
     this.hud.onPause = () => this.pause();
+
+    // 彩蛋：用户点「关闭最佳路径」按钮
+    this.hud.onCloseBestPath = () => this.closeBestPath();
 
     // 触屏 D-pad：按住 = 进入持续移动方向；松开 = 清除
     this.hud.onTouchDirStart = (dir) => {
@@ -112,7 +123,86 @@ export class Game {
       },
     });
 
+    this.setupEasterEgg();
+
     this.start();
+  }
+
+  /**
+   * 彩蛋：右上角连点 10 次（8s 窗口内）→ 显示当前关卡最佳路径 8 秒
+   * - 监听 window pointerdown（capture 阶段）；不阻止默认事件
+   * - 坐标判定：x 在右侧 100px 且 y 在顶部 100px 即视作命中
+   * - 仅在 playing 状态下生效，避免菜单/选关页误触
+   * - 计数过半时给出进度 toast 让玩家知道彩蛋存在
+   */
+  private setupEasterEgg(): void {
+    window.addEventListener(
+      'pointerdown',
+      (e) => {
+        if (this.state !== 'playing') return;
+        const w = window.innerWidth;
+        const inHotspot =
+          e.clientX >= w - Game.EASTER_EGG_HOTSPOT &&
+          e.clientY <= Game.EASTER_EGG_HOTSPOT;
+        if (!inHotspot) return;
+
+        const now = performance.now();
+        // 滑动窗口：剔除超时的点击
+        this.easterEggClicks = this.easterEggClicks.filter(
+          (t) => now - t < Game.EASTER_EGG_WINDOW_MS
+        );
+        this.easterEggClicks.push(now);
+
+        const count = this.easterEggClicks.length;
+        if (count >= Game.EASTER_EGG_TARGET) {
+          this.easterEggClicks = [];
+          this.triggerBestPathEgg();
+          return;
+        }
+        // 过半（5 次）开始给进度提示，让玩家知道触发条件
+        if (count >= Math.floor(Game.EASTER_EGG_TARGET / 2)) {
+          const remain = Game.EASTER_EGG_TARGET - count;
+          this.hud.showToast(`再点 ${remain} 次解锁彩蛋`, 800);
+        }
+      },
+      { capture: true }
+    );
+  }
+
+  /** 触发：计算当前关卡最优路径并常驻显示，由用户主动关闭 */
+  private triggerBestPathEgg(): void {
+    if (!this.level || !this.player) return;
+    // 起点：玩家当前格（更直观地告诉玩家「下一步该往哪走」）
+    const from = { x: this.player.state.gx, y: this.player.state.gy };
+    const exit = this.level.maze.exit;
+
+    // 关键：本关需要钥匙时，路径必须先依次经过所有「尚未拾取」的钥匙再到出口
+    // 否则路径会指向出口但其实门没开，玩家照走会走冤枉路
+    const remainingKeys = this.level.entities
+      .filter((e) => e.active && e.kind === 'key')
+      .map((e) => ({ x: e.x, y: e.y }));
+
+    const path =
+      remainingKeys.length > 0
+        ? shortestPathThroughWaypoints(this.level.maze, from, remainingKeys, exit)
+        : shortestPath(this.level.maze, from, exit);
+    if (path.length < 2) return;
+
+    this.renderer.showBestPath(path);
+    this.hud.showBestPathBtn();
+    audio.playSfx('pickup_map'); // 借用「地图碎片」音效，氛围契合
+    const tip =
+      remainingKeys.length > 0
+        ? `✨ 最佳路径已显示 · 途经 ${remainingKeys.length} 把钥匙`
+        : '✨ 最佳路径已显示';
+    this.hud.showToast(tip, 2000);
+  }
+
+  /** 用户点击「关闭最佳路径」按钮 */
+  private closeBestPath(): void {
+    this.renderer.clearBestPath();
+    this.hud.hideBestPathBtn();
+    audio.playSfx('ui_close');
   }
 
   // ============ 状态切换 ============
@@ -219,6 +309,8 @@ export class Game {
     this.player = null;
     this.particles.clear();
     this.touchHeldDir = null;
+    this.renderer.clearBestPath();
+    this.hud.hideBestPathBtn();
   }
 
   startLevel(levelId: number): void {
@@ -242,6 +334,7 @@ export class Game {
 
     this.particles.clear();
     this.renderer.resetVisited(this.level.maze);
+    this.hud.hideBestPathBtn();
 
     audio.playBgm(config.bgm as 'bgm_dawn', 800);
     audio.playSfx('level_start');

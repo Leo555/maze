@@ -7,7 +7,12 @@
  *   - 道具/机关位置（基于 BFS 距离场放置）
  */
 
-import { generateMaze, distanceField, shortestPathLength } from '../maze/Generator';
+import {
+  generateMaze,
+  distanceField,
+  shortestPathLength,
+  shortestPathThroughWaypoints,
+} from '../maze/Generator';
 import type { Maze } from '../maze/Generator';
 import type { LevelConfig } from '../config/levels';
 import { createRng, randomSeed, shuffle } from '../core/utils';
@@ -41,7 +46,8 @@ export interface LevelRuntime {
 
 export function buildLevel(config: LevelConfig, seed: number = randomSeed()): LevelRuntime {
   const maze = generateMaze(config.size, config.size, seed);
-  const optimal = shortestPathLength(maze, maze.start, maze.exit);
+  // 起点 → 终点的"裸"最短路径（不考虑钥匙），用于实体放置时的距离参考
+  const baseOptimal = shortestPathLength(maze, maze.start, maze.exit);
 
   const rng = createRng(seed ^ 0x9e3779b9);
 
@@ -88,7 +94,7 @@ export function buildLevel(config: LevelConfig, seed: number = randomSeed()): Le
   // 沙漏：均匀分布（取中间距离）
   const midPool = candidates
     .filter((c) => !used.has(k(c.x, c.y)))
-    .filter((c) => c.d > optimal * 0.2 && c.d < optimal * 0.9);
+    .filter((c) => c.d > baseOptimal * 0.2 && c.d < baseOptimal * 0.9);
   shuffle(midPool, rng);
   for (let i = 0; i < config.hourglasses && i < midPool.length; i++) {
     const c = midPool[i];
@@ -100,10 +106,29 @@ export function buildLevel(config: LevelConfig, seed: number = randomSeed()): Le
     entities.push({ id: `map_${i}`, kind: 'map_shard', x: p.x, y: p.y, active: true })
   );
 
+  // 真正的最短「通关」路径：必须依次经过所有钥匙再到出口
+  // 否则结算页的「最短路径」会显示成不收钥匙的直线长度，与实际可走路径严重偏离
+  const keyPositions = entities
+    .filter((e) => e.kind === 'key')
+    .map((e) => ({ x: e.x, y: e.y }));
+  let optimalPath = baseOptimal;
+  if (keyPositions.length > 0) {
+    const fullPath = shortestPathThroughWaypoints(
+      maze,
+      maze.start,
+      keyPositions,
+      maze.exit
+    );
+    if (fullPath.length >= 2) {
+      // path.length 是格数；步数（与玩家 steps 同口径）= 格数 - 1
+      optimalPath = fullPath.length - 1;
+    }
+  }
+
   return {
     config,
     maze,
-    optimalPath: optimal,
+    optimalPath,
     entities,
     seed,
   };

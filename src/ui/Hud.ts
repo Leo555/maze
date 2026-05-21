@@ -62,6 +62,7 @@ export class Hud {
   private toastEl!: HTMLElement;
   private dashBtn: HTMLButtonElement | null = null;
   private dashRing: HTMLElement | null = null;
+  private bestPathBtn: HTMLButtonElement | null = null;
 
   onMuteToggle: (() => void) | null = null;
   onPause: (() => void) | null = null;
@@ -69,6 +70,8 @@ export class Hud {
   onTouchDirStart: ((dir: Direction) => void) | null = null;
   onTouchDirEnd: ((dir: Direction) => void) | null = null;
   onDashTap: (() => void) | null = null;
+  /** 彩蛋：用户点击「关闭最佳路径」按钮 */
+  onCloseBestPath: (() => void) | null = null;
 
   readonly isTouch: boolean;
 
@@ -132,6 +135,18 @@ export class Hud {
     this.toastEl = document.createElement('div');
     this.toastEl.className = 'toast';
     this.root.appendChild(this.toastEl);
+
+    // 彩蛋：关闭最佳路径按钮（默认隐藏）
+    this.bestPathBtn = document.createElement('button');
+    this.bestPathBtn.className = 'best-path-btn';
+    this.bestPathBtn.type = 'button';
+    this.bestPathBtn.innerHTML =
+      `<span class="x">✕</span><span class="lbl">关 闭 最 佳 路 径</span>`;
+    this.bestPathBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.onCloseBestPath?.();
+    });
+    this.root.appendChild(this.bestPathBtn);
 
     // 触屏设备：构建虚拟方向键 + 冲刺按钮
     if (this.isTouch) {
@@ -262,6 +277,16 @@ export class Hud {
     setTimeout(() => this.toastEl.classList.remove('show'), duration);
   }
 
+  /** 显示「关闭最佳路径」按钮（彩蛋触发后由 Game 调用） */
+  showBestPathBtn(): void {
+    this.bestPathBtn?.classList.add('show');
+  }
+
+  /** 隐藏「关闭最佳路径」按钮（用户主动关 / 关卡切换时调用） */
+  hideBestPathBtn(): void {
+    this.bestPathBtn?.classList.remove('show');
+  }
+
   show(): void {
     this.root.style.display = '';
   }
@@ -274,5 +299,6 @@ export class Hud {
     this.root.innerHTML = '';
     this.dashBtn = null;
     this.dashRing = null;
+    this.bestPathBtn = null;
   }
 }

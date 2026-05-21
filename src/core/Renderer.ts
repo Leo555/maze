@@ -48,6 +48,10 @@ export class Renderer {
   shakeAmount = 0;
   shakeTime = 0;
 
+  // 彩蛋：显示最佳路径（覆盖在迷宫之上）
+  // bestPath = 路径格子序列；为 null 时不绘制。由用户手动关闭，不自动消失
+  bestPath: Array<{ x: number; y: number }> | null = null;
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     const ctx = canvas.getContext('2d');
@@ -80,6 +84,7 @@ export class Renderer {
     this.fadeIn = 1;
     this.fadeOut = 0;
     this.revealUntil = 0;
+    this.bestPath = null;
   }
 
   markVisited(x: number, y: number): void {
@@ -97,6 +102,19 @@ export class Renderer {
 
   triggerFadeOut(): void {
     this.fadeOut = 0.001;
+  }
+
+  /**
+   * 彩蛋：显示最佳路径，持续显示直到调用 clearBestPath() 主动关闭。
+   * 路径绘制在迷宫之上、雾遮罩之下，配合发光效果突出显示。
+   */
+  showBestPath(cells: Array<{ x: number; y: number }>): void {
+    this.bestPath = cells.length > 0 ? cells : null;
+  }
+
+  /** 立刻清除最佳路径（关卡切换 / 用户主动关闭时调用） */
+  clearBestPath(): void {
+    this.bestPath = null;
   }
 
   /** 计算当前布局参数 */
@@ -190,6 +208,11 @@ export class Renderer {
 
     // === 视野遮罩 ===
     this.drawFog(ctx, theme, config, player, layout);
+
+    // === 彩蛋：最佳路径（穿透雾气显示，由用户主动关闭） ===
+    if (this.bestPath) {
+      this.drawBestPath(ctx, theme, layout);
+    }
 
     // === 进入/退出渐变 ===
     if (this.fadeIn > 0) {
@@ -514,6 +537,63 @@ export class Renderer {
 
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, this.cssWidth, this.cssHeight);
+  }
+
+  /**
+   * 彩蛋：绘制最佳路径
+   *   - 主色：theme.exit（出口色，自然又显眼）
+   *   - 双层线：外层柔和发光（高斯感），内层主色高亮
+   *   - 头尾两端的剩余时长 t（0~1）做整体淡入淡出，避免突兀消失
+   *   - 沿路径还点缀一些小圆点，配合波动呼吸增强动效
+   */
+  private drawBestPath(
+    ctx: CanvasRenderingContext2D,
+    theme: Theme,
+    layout: RenderContext
+  ): void {
+    if (!this.bestPath || this.bestPath.length < 2) return;
+    const cs = layout.cellSize;
+    const ox = layout.offsetX;
+    const oy = layout.offsetY;
+
+    // 路径常驻显示，仅做呼吸动效（无淡出）
+    const t = performance.now() / 600;
+
+    ctx.save();
+
+    // 1) 外层光晕：粗、半透明
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = this.hexToRgba(theme.exit, 0.32);
+    ctx.lineWidth = cs * 0.42;
+    ctx.beginPath();
+    for (let i = 0; i < this.bestPath.length; i++) {
+      const c = this.bestPath[i];
+      const px = ox + (c.x + 0.5) * cs;
+      const py = oy + (c.y + 0.5) * cs;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // 2) 内层亮线
+    ctx.strokeStyle = this.hexToRgba(theme.exit, 0.95);
+    ctx.lineWidth = cs * 0.18;
+    ctx.stroke();
+
+    // 3) 沿途点：每隔 2 个格放一个小圆点，呼吸缩放
+    const pulse = 0.5 + 0.5 * Math.sin(t * Math.PI);
+    ctx.fillStyle = this.hexToRgba('#ffffff', 0.85);
+    for (let i = 1; i < this.bestPath.length - 1; i += 2) {
+      const c = this.bestPath[i];
+      const px = ox + (c.x + 0.5) * cs;
+      const py = oy + (c.y + 0.5) * cs;
+      ctx.beginPath();
+      ctx.arc(px, py, cs * (0.05 + 0.025 * pulse), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
   }
 
   // ============ 工具 ============
