@@ -16,6 +16,7 @@ import {
 import type { Maze } from '../maze/Generator';
 import type { LevelConfig } from '../config/levels';
 import { createRng, randomSeed, shuffle } from '../core/utils';
+import type { Pos } from '../core/types';
 
 export type EntityKind = 'key' | 'hourglass' | 'map_shard';
 
@@ -68,12 +69,12 @@ export function buildLevel(config: LevelConfig, seed: number = randomSeed()): Le
   const k = (x: number, y: number) => `${x},${y}`;
 
   // 从前 N% 的候选中随机抽（远但不要全集中在最远点）
-  const pickFar = (count: number, ratio = 0.5): Array<{ x: number; y: number }> => {
+  const pickFar = (count: number, ratio = 0.5): Pos[] => {
     const pool = candidates
       .filter((c) => !used.has(k(c.x, c.y)))
       .slice(0, Math.max(count * 2, Math.floor(candidates.length * ratio)));
     shuffle(pool, rng);
-    const out: Array<{ x: number; y: number }> = [];
+    const out: Pos[] = [];
     for (let i = 0; i < count && i < pool.length; i++) {
       const c = pool[i];
       used.add(k(c.x, c.y));

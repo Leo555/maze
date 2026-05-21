@@ -16,6 +16,7 @@ import type { Entity } from '../maze/LevelBuilder';
 import type { ParticleSystem } from '../fx/Particles';
 import { VISION_RADIUS } from '../config/levels';
 import type { LevelConfig } from '../config/levels';
+import type { Path } from './types';
 
 interface RenderContext {
   cellSize: number;
@@ -63,7 +64,7 @@ export class Renderer {
 
   // 彩蛋：显示最佳路径（覆盖在迷宫之上）
   // bestPath = 路径格子序列；为 null 时不绘制。由用户手动关闭，不自动消失
-  bestPath: Array<{ x: number; y: number }> | null = null;
+  bestPath: Path | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -131,7 +132,7 @@ export class Renderer {
    * 彩蛋：显示最佳路径，持续显示直到调用 clearBestPath() 主动关闭。
    * 路径绘制在迷宫之上、雾遮罩之下，配合发光效果突出显示。
    */
-  showBestPath(cells: Array<{ x: number; y: number }>): void {
+  showBestPath(cells: Path): void {
     this.bestPath = cells.length > 0 ? cells : null;
   }
 

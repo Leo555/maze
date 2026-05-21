@@ -12,6 +12,7 @@
  */
 
 import { createRng, shuffle } from '../core/utils';
+import type { Pos, Path } from '../core/types';
 
 export interface Cell {
   x: number;
@@ -34,8 +35,8 @@ export class Maze {
   width: number;
   height: number;
   cells: Cell[][];
-  start: { x: number; y: number };
-  exit: { x: number; y: number };
+  start: Pos;
+  exit: Pos;
 
   constructor(width: number, height: number) {
     this.width = width;
@@ -146,8 +147,8 @@ export function generateMaze(width: number, height: number, seed: number): Maze 
  */
 export function shortestPathLength(
   maze: Maze,
-  from: { x: number; y: number },
-  to: { x: number; y: number }
+  from: Pos,
+  to: Pos
 ): number {
   const dist: number[][] = [];
   for (let y = 0; y < maze.height; y++) {
@@ -179,9 +180,9 @@ export function shortestPathLength(
  */
 export function shortestPath(
   maze: Maze,
-  from: { x: number; y: number },
-  to: { x: number; y: number }
-): Array<{ x: number; y: number }> {
+  from: Pos,
+  to: Pos
+): Path {
   const w = maze.width;
   const h = maze.height;
   // parent[y][x] = 上一个格的索引 (y*w + x)；-1 表示未访问；起点为自身
@@ -212,7 +213,7 @@ export function shortestPath(
   if (!found) return [];
 
   // 回溯
-  const path: Array<{ x: number; y: number }> = [];
+  const path: Path = [];
   let cx = to.x;
   let cy = to.y;
   while (true) {
@@ -231,7 +232,7 @@ export function shortestPath(
  */
 export function distanceField(
   maze: Maze,
-  from: { x: number; y: number }
+  from: Pos
 ): number[][] {
   const dist: number[][] = [];
   for (let y = 0; y < maze.height; y++) {
@@ -271,10 +272,10 @@ export function distanceField(
  */
 export function shortestPathThroughWaypoints(
   maze: Maze,
-  from: { x: number; y: number },
-  waypoints: Array<{ x: number; y: number }>,
-  to: { x: number; y: number }
-): Array<{ x: number; y: number }> {
+  from: Pos,
+  waypoints: Pos[],
+  to: Pos
+): Path {
   if (waypoints.length === 0) {
     return shortestPath(maze, from, to);
   }
@@ -368,7 +369,7 @@ export function shortestPathThroughWaypoints(
   order.reverse(); // [w0, w1, ..., wk-1]，访问顺序
 
   // 拼接实际格子路径：from → waypoints[order[0]] → ... → to
-  const fullPath: Array<{ x: number; y: number }> = [];
+  const fullPath: Path = [];
   let prevPoint = from;
   for (const idx of order) {
     const target = waypoints[idx];
