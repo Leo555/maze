@@ -62,9 +62,11 @@ export class Renderer {
   shakeAmount = 0;
   shakeTime = 0;
 
-  // 彩蛋：显示最佳路径（覆盖在迷宫之上）
+  // 彩蛋 / 复盘：显示最佳路径（覆盖在迷宫之上）
   // bestPath = 路径格子序列；为 null 时不绘制。由用户手动关闭，不自动消失
   bestPath: Path | null = null;
+  // 复盘：显示玩家实际走过的路径（与 bestPath 同时显示用于对比）
+  playerPath: Path | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -108,6 +110,7 @@ export class Renderer {
     this.fadeOut = 0;
     this.revealUntil = 0;
     this.bestPath = null;
+    this.playerPath = null;
     this.staticDirty = true; // 新关卡 → 静态层需重建
   }
 
@@ -139,6 +142,18 @@ export class Renderer {
   /** 立刻清除最佳路径（关卡切换 / 用户主动关闭时调用） */
   clearBestPath(): void {
     this.bestPath = null;
+  }
+
+  /**
+   * 复盘：显示玩家实际走过的路径（含回头与绕路）。
+   * 与 bestPath 一起显示用于对比；颜色低饱和、线宽较细，避免压过最优路径主线。
+   */
+  showPlayerPath(cells: Path): void {
+    this.playerPath = cells.length > 0 ? cells : null;
+  }
+
+  clearPlayerPath(): void {
+    this.playerPath = null;
   }
 
   /** 计算当前布局参数 */
@@ -236,7 +251,11 @@ export class Renderer {
     // === 视野遮罩 ===
     this.drawFog(ctx, theme, config, player, layout);
 
-    // === 彩蛋：最佳路径（穿透雾气显示，由用户主动关闭） ===
+    // === 彩蛋 / 复盘：路径叠加（穿透雾气显示） ===
+    // 玩家路径先画（在底层，作为对比参考），最佳路径后画（金色亮线在上层视觉强突出）
+    if (this.playerPath) {
+      this.drawPlayerPath(ctx, layout);
+    }
     if (this.bestPath) {
       this.drawBestPath(ctx, theme, layout);
     }
@@ -661,6 +680,45 @@ export class Renderer {
   }
 
   // ============ 工具 ============
+  /**
+   * 复盘：绘制玩家实际走过的路径
+   *   - 用低饱和的「玩家蓝」色（区别于金色最优路径）
+   *   - 单层细线，无发光效果，避免压过最优路径主线
+   *   - 重叠段会被后续 drawBestPath 的金线覆盖（视觉上自然形成"重合处贴着金线"的效果）
+   *   - 使用 Path2D 单次 stroke，开销极低
+   */
+  private drawPlayerPath(
+    ctx: CanvasRenderingContext2D,
+    layout: RenderContext
+  ): void {
+    if (!this.playerPath || this.playerPath.length < 2) return;
+    const cs = layout.cellSize;
+    const ox = layout.offsetX;
+    const oy = layout.offsetY;
+
+    const path = new Path2D();
+    for (let i = 0; i < this.playerPath.length; i++) {
+      const c = this.playerPath[i];
+      const px = ox + (c.x + 0.5) * cs;
+      const py = oy + (c.y + 0.5) * cs;
+      if (i === 0) path.moveTo(px, py);
+      else path.lineTo(px, py);
+    }
+
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    // 外层柔光（半透明、稍粗）
+    ctx.strokeStyle = 'rgba(80, 110, 170, 0.28)';
+    ctx.lineWidth = cs * 0.32;
+    ctx.stroke(path);
+    // 内层主线
+    ctx.strokeStyle = 'rgba(80, 110, 170, 0.9)';
+    ctx.lineWidth = cs * 0.12;
+    ctx.stroke(path);
+    ctx.restore();
+  }
+
   private roundRect(
     ctx: CanvasRenderingContext2D,
     x: number,

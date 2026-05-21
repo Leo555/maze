@@ -566,7 +566,7 @@ export function showFail(
  * 关闭按钮调用 onClose，由 Game 切回 transition 状态并重新展示结算/失败页。
  */
 export function showOptimalReview(
-  data: { steps: number; optimal: number; passed: boolean },
+  data: { steps: number; optimal: number; passed: boolean; hasPlayerPath: boolean },
   onClose: () => void
 ): void {
   audio.playSfx('ui_open');
@@ -583,9 +583,26 @@ export function showOptimalReview(
     ? `你走了 ${data.steps} 步 · 最优 ${data.optimal} 步 · 效率 ${efficiency}%`
     : `本关最优解：${data.optimal} 步`;
 
+  // 图例：仅当玩家轨迹存在时显示蓝色项；最优路径始终显示
+  const legendHtml = `
+    <div class="review-legend">
+      <span class="legend-item">
+        <span class="legend-dot legend-dot-best"></span>最 佳 路 径
+      </span>
+      ${
+        data.hasPlayerPath
+          ? `<span class="legend-item">
+               <span class="legend-dot legend-dot-player"></span>你 的 轨 迹
+             </span>`
+          : ''
+      }
+    </div>
+  `;
+
   card.innerHTML = `
     <div class="scene-title" style="font-size: 22px; margin: 0">最 佳 路 径</div>
-    <div class="scene-subtitle" style="margin: 6px 0 14px">${tip}</div>
+    <div class="scene-subtitle" style="margin: 6px 0 10px">${tip}</div>
+    ${legendHtml}
   `;
 
   const btnGroup = document.createElement('div');

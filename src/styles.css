@@ -697,6 +697,37 @@ body {
   min-width: 140px;
 }
 
+/* 复盘浮窗内图例：色块 + 文字，与画面里的两条路径线一一对应 */
+.review-legend {
+  display: flex;
+  gap: 18px;
+  justify-content: center;
+  align-items: center;
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--text-soft);
+}
+.review-legend .legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.review-legend .legend-dot {
+  display: inline-block;
+  width: 22px;
+  height: 4px;
+  border-radius: 2px;
+}
+/* 最佳路径：用 accent 色（与游戏内 best path 金线一致） */
+.review-legend .legend-dot-best {
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent-soft);
+}
+/* 玩家轨迹：与 Renderer.drawPlayerPath 中 rgba(80,110,170,0.9) 一致 */
+.review-legend .legend-dot-player {
+  background: rgba(80, 110, 170, 0.9);
+}
+
 /* Toast 提示 */
 .toast {
   position: absolute;

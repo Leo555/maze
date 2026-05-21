@@ -58,6 +58,11 @@ export class Game {
   // 收集进度
   private keysCollected = 0;
   private steps = 0;
+  /**
+   * 玩家行走轨迹（按到达顺序记录每一格，含起点）。
+   * 用于「查看最佳路径」时在迷宫上叠加显示，让玩家直观对比偏差。
+   */
+  private playerPath: Array<{ x: number; y: number }> = [];
 
   // 倒计时音效节流
   private lastCountdownTick = -1;
@@ -251,6 +256,8 @@ export class Game {
     this.particles.clear();
     this.touchHeldDir = null;
     this.renderer.clearBestPath();
+    this.renderer.clearPlayerPath();
+    this.playerPath = [];
     this.hud.hideBestPathBtn();
     // 接下来要显示菜单背景，重置脏标让 loop 至少画一次
     this.menuBgCleared = false;
@@ -274,6 +281,8 @@ export class Game {
     this.keysCollected = 0;
     this.steps = 0;
     this.lastCountdownTick = -1;
+    // 重置玩家轨迹，以起点为第一个采样
+    this.playerPath = [{ x: this.level.maze.start.x, y: this.level.maze.start.y }];
 
     this.particles.clear();
     this.renderer.resetVisited(this.level.maze);
@@ -345,6 +354,8 @@ export class Game {
   private onPlayerArrive(x: number, y: number): void {
     if (!this.level) return;
     this.renderer.markVisited(x, y);
+    // 记录轨迹（每次到达新格子追加一次；与 markVisited 同步，无重复采样问题）
+    this.playerPath.push({ x, y });
 
     // 检查是否拾取到道具
     for (const e of this.level.entities) {
@@ -550,6 +561,10 @@ export class Game {
     if (path.length >= 2) {
       this.renderer.showBestPath(path);
     }
+    // 同时叠加玩家实际走过的轨迹用于对比（含起点；至少 2 格才有视觉意义）
+    if (this.playerPath.length >= 2) {
+      this.renderer.showPlayerPath(this.playerPath);
+    }
 
     // 把玩家暂时定格在起点，避免观察期间画面里出现位于出口的玩家把路径起点遮挡
     if (this.player) {
@@ -568,15 +583,21 @@ export class Game {
     setTimeout(() => {
       if (this.state !== 'review') return;
       showOptimalReview(
-        { steps: args.steps, optimal: this.level!.optimalPath, passed: args.passed },
+        {
+          steps: args.steps,
+          optimal: this.level!.optimalPath,
+          passed: args.passed,
+          hasPlayerPath: this.playerPath.length >= 2,
+        },
         () => this.exitReview(args.returnToOverlay)
       );
     }, 360);
   }
 
-  /** 退出观察模式：清除最佳路径 → 回到结算/失败 overlay */
+  /** 退出观察模式：清除最佳路径 + 玩家轨迹 → 回到结算/失败 overlay */
   private exitReview(returnToOverlay: () => void): void {
     this.renderer.clearBestPath();
+    this.renderer.clearPlayerPath();
     // 状态机切回 transition，让 openResultOverlay/openFailOverlay 中的 'transition' 假设保持一致
     this.state = 'transition';
     returnToOverlay();
