@@ -67,6 +67,10 @@ export class Game {
   private rafId: number | null = null;
   private lastTime = 0;
 
+  // 菜单期 canvas 清屏脏标记：true = 已清过，loop 中可跳过 fillRect
+  // 在 cleanupLevel / resize 后重置为 false
+  private menuBgCleared = false;
+
   // 彩蛋：右上角连点 10 次显示最佳路径
   // 时间窗：8 秒内连点累计；过半（≥5）时给出进度提示
   private easterEggClicks: number[] = [];
@@ -122,6 +126,11 @@ export class Game {
     });
 
     this.setupEasterEgg();
+
+    // 窗口尺寸变化时，canvas 内容会被清空 → 菜单期需要重新画背景
+    window.addEventListener('resize', () => {
+      this.menuBgCleared = false;
+    });
 
     this.start();
   }
@@ -309,6 +318,8 @@ export class Game {
     this.touchHeldDir = null;
     this.renderer.clearBestPath();
     this.hud.hideBestPathBtn();
+    // 接下来要显示菜单背景，重置脏标让 loop 至少画一次
+    this.menuBgCleared = false;
   }
 
   startLevel(levelId: number): void {
@@ -638,13 +649,15 @@ export class Game {
         this.player,
         reveal
       );
-    } else {
-      // 菜单期间画一个简洁背景（浅色主题主调）
+    } else if (!this.menuBgCleared) {
+      // 菜单/选关/设置期：UI 由 DOM overlay 承载，canvas 仅需清屏一次即可。
+      // 之前每帧都重画一次整屏 fillRect，纯属浪费——这里改为「dirty」标记。
       const ctx = this.renderer.ctx;
       ctx.save();
       ctx.fillStyle = '#f5efe6';
       ctx.fillRect(0, 0, this.renderer.canvas.width, this.renderer.canvas.height);
       ctx.restore();
+      this.menuBgCleared = true;
     }
 
     this.rafId = requestAnimationFrame(this.loop);

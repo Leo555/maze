@@ -32,8 +32,21 @@ export class Renderer {
   private cssWidth = 0;
   private cssHeight = 0;
 
+  // === 静态层离屏缓存 ===
+  // 把每帧固定不变的「背景 + 地板 + 墙体阴影 + 墙体」预渲染到一张离屏 canvas，
+  // 主循环只需 drawImage 一次即可。仅在 maze / 主题 / 尺寸变化时失效。
+  // 31×31 关卡每帧可省下数千次 fillRect → 显著降低 Canvas 负担。
+  private staticLayer: HTMLCanvasElement | null = null;
+  private staticDirty = true;
+  private staticKey = ''; // 缓存 key：mazeRef + theme.name + dpr + cssSize
+  private lastMaze: Maze | null = null;
+  private lastTheme: Theme | null = null;
+
   // 已探索的格子（用于在雾外保留淡淡的轮廓）
   visited: boolean[][] = [];
+
+  // resize 节流（rAF）
+  private resizePending = false;
 
   // 完整地图揭示倒计时（地图碎片效果）
   revealUntil = 0;
@@ -66,6 +79,14 @@ export class Renderer {
   }
 
   resize = (): void => {
+    // 节流：连续 resize 事件合并到下一帧统一执行
+    if (this.resizePending) return;
+    this.resizePending = true;
+    requestAnimationFrame(this.applyResize);
+  };
+
+  private applyResize = (): void => {
+    this.resizePending = false;
     this.dpr = window.devicePixelRatio || 1;
     this.cssWidth = window.innerWidth;
     this.cssHeight = window.innerHeight;
@@ -73,6 +94,7 @@ export class Renderer {
     this.canvas.height = Math.floor(this.cssHeight * this.dpr);
     this.canvas.style.width = `${this.cssWidth}px`;
     this.canvas.style.height = `${this.cssHeight}px`;
+    this.staticDirty = true; // 尺寸变化 → 静态层需重建
   };
 
   resetVisited(maze: Maze): void {
@@ -85,6 +107,7 @@ export class Renderer {
     this.fadeOut = 0;
     this.revealUntil = 0;
     this.bestPath = null;
+    this.staticDirty = true; // 新关卡 → 静态层需重建
   }
 
   markVisited(x: number, y: number): void {
@@ -170,13 +193,12 @@ export class Renderer {
     const ctx = this.ctx;
     const layout = this.layout(maze);
 
+    // 检查静态层是否需要重建（maze 实例 / theme 引用 / dpr / 尺寸 变更时）
+    this.ensureStaticLayer(maze, theme, layout);
+
     // === 整体设置 ===
     ctx.save();
     ctx.scale(this.dpr, this.dpr);
-
-    // 背景
-    ctx.fillStyle = theme.bg;
-    ctx.fillRect(0, 0, this.cssWidth, this.cssHeight);
 
     // 屏幕震动
     if (this.shakeAmount > 0) {
@@ -185,8 +207,10 @@ export class Renderer {
       ctx.translate(sx, sy);
     }
 
-    // === 地板 ===
-    this.drawFloor(ctx, maze, theme, layout);
+    // === 静态层（背景 + 地板 + 墙体阴影 + 墙体）一次 drawImage 贴上 ===
+    if (this.staticLayer) {
+      ctx.drawImage(this.staticLayer, 0, 0, this.cssWidth, this.cssHeight);
+    }
 
     // === 已探索区域底色 ===
     this.drawExploredOverlay(ctx, maze, theme, layout);
@@ -196,9 +220,6 @@ export class Renderer {
 
     // === 实体（道具） ===
     this.drawEntities(ctx, theme, entities, layout);
-
-    // === 墙体 ===
-    this.drawWalls(ctx, maze, theme, layout);
 
     // === 玩家 ===
     this.drawPlayer(ctx, theme, player, layout);
@@ -227,9 +248,55 @@ export class Renderer {
     ctx.restore();
   }
 
+  /**
+   * 确保静态层缓存有效。
+   * 关卡 / 主题 / 视口尺寸变化时触发重建：
+   *   - 创建一张 cssWidth × cssHeight × dpr 的离屏 canvas
+   *   - 一次性把背景、地板、墙阴影、墙体绘制上去
+   *   - 后续每帧直接 drawImage 一次即可（DPR 由 ctx.scale 还原）
+   */
+  private ensureStaticLayer(maze: Maze, theme: Theme, layout: RenderContext): void {
+    const key = `${this.cssWidth}x${this.cssHeight}@${this.dpr}|${theme.bg}`;
+    const mazeChanged = this.lastMaze !== maze;
+    const themeChanged = this.lastTheme !== theme;
+    const sizeChanged = this.staticKey !== key;
+    if (!this.staticDirty && !mazeChanged && !themeChanged && !sizeChanged && this.staticLayer) {
+      return;
+    }
+
+    const w = Math.floor(this.cssWidth * this.dpr);
+    const h = Math.floor(this.cssHeight * this.dpr);
+    if (w <= 0 || h <= 0) return;
+
+    // 复用已有 canvas（仅尺寸不一致时重建），避免反复分配大块显存
+    if (!this.staticLayer || this.staticLayer.width !== w || this.staticLayer.height !== h) {
+      this.staticLayer = document.createElement('canvas');
+      this.staticLayer.width = w;
+      this.staticLayer.height = h;
+    }
+    const sctx = this.staticLayer.getContext('2d');
+    if (!sctx) return;
+
+    sctx.setTransform(1, 0, 0, 1, 0, 0); // 重置
+    sctx.clearRect(0, 0, w, h);
+    sctx.scale(this.dpr, this.dpr);
+
+    // 背景
+    sctx.fillStyle = theme.bg;
+    sctx.fillRect(0, 0, this.cssWidth, this.cssHeight);
+
+    // 地板 + 墙体（一次性绘制到离屏）
+    this.drawFloor(sctx, theme, layout);
+    this.drawWalls(sctx, maze, theme, layout);
+
+    this.staticDirty = false;
+    this.staticKey = key;
+    this.lastMaze = maze;
+    this.lastTheme = theme;
+  }
+
   private drawFloor(
     ctx: CanvasRenderingContext2D,
-    _maze: Maze,
     theme: Theme,
     layout: RenderContext
   ): void {

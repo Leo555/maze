@@ -54,11 +54,24 @@ export class Hud {
   root: HTMLElement;
   private topBar!: HTMLElement;
   private timerEl!: HTMLElement;
+  /** 缓存 timer / keys 内部 .value 节点，避免每帧 querySelector */
+  private timerValueEl!: HTMLElement;
   private keysEl!: HTMLElement;
+  private keysValueEl!: HTMLElement;
   private muteBtn!: HTMLElement;
   private minimapContainer!: HTMLElement;
   private toastEl!: HTMLElement;
   private bestPathBtn: HTMLButtonElement | null = null;
+
+  // 上一次写入 HUD 的值，用于 diff，避免无意义的 textContent 赋值
+  private lastTimerText = '';
+  private lastTimerLevel: '' | 'warn' | 'critical' = '';
+  private lastKeysText = '';
+  private lastKeysVisible = false;
+  private lastMuted: boolean | null = null;
+  private lastHudFg = '';
+  private lastAccent = '';
+  private lastDarkTheme: boolean | null = null;
 
   onMuteToggle: (() => void) | null = null;
   onPause: (() => void) | null = null;
@@ -85,9 +98,11 @@ export class Hud {
     this.timerEl = document.createElement('div');
     this.timerEl.className = 'item timer';
     this.timerEl.innerHTML = `<span class="icon">⏱</span><span class="value">00:00</span>`;
+    this.timerValueEl = this.timerEl.querySelector('.value') as HTMLElement;
     this.keysEl = document.createElement('div');
     this.keysEl.className = 'item keys';
     this.keysEl.innerHTML = `<span class="icon">🔑</span><span class="value">0/0</span>`;
+    this.keysValueEl = this.keysEl.querySelector('.value') as HTMLElement;
 
     this.topBar.appendChild(this.timerEl);
     this.topBar.appendChild(this.keysEl);
@@ -189,37 +204,63 @@ export class Hud {
   }
 
   update(data: HudData): void {
-    // 主题色应用到 CSS 变量
-    this.root.style.setProperty('--hud-fg', data.theme.hudFg);
-    this.root.style.setProperty('--accent', data.theme.exit);
+    // 主题色应用到 CSS 变量（diff：仅在变化时写）
+    if (data.theme.hudFg !== this.lastHudFg) {
+      this.root.style.setProperty('--hud-fg', data.theme.hudFg);
+      this.lastHudFg = data.theme.hudFg;
+    }
+    if (data.theme.exit !== this.lastAccent) {
+      this.root.style.setProperty('--accent', data.theme.exit);
+      this.lastAccent = data.theme.exit;
+    }
 
     // 根据主题文字色推断主题明暗，给 HUD 元素自动选择合适的背景：
     //   - 浅色主题（hudFg 偏深，relativeLuminance < 0.5）：用半透明白底
     //   - 深色主题（hudFg 偏浅）：用半透明黑底
     // 这样在所有关卡下 HUD 文字都能保持高对比度
     const isDarkTheme = isLightColor(data.theme.hudFg);
-    this.root.classList.toggle('hud-dark-theme', isDarkTheme);
-    // 计时器
+    if (isDarkTheme !== this.lastDarkTheme) {
+      this.root.classList.toggle('hud-dark-theme', isDarkTheme);
+      this.lastDarkTheme = isDarkTheme;
+    }
+
+    // 计时器（每秒只可能变 1 次，diff 命中率高）
     const t = Math.max(0, data.time);
-    const valueEl = this.timerEl.querySelector('.value') as HTMLElement;
-    valueEl.textContent = formatTime(t);
-    this.timerEl.classList.remove('warn', 'critical');
+    const timerText = formatTime(t);
+    if (timerText !== this.lastTimerText) {
+      this.timerValueEl.textContent = timerText;
+      this.lastTimerText = timerText;
+    }
+    let level: '' | 'warn' | 'critical' = '';
     if (data.isCountdown) {
-      if (t <= 3) this.timerEl.classList.add('critical');
-      else if (t <= 10) this.timerEl.classList.add('warn');
+      if (t <= 3) level = 'critical';
+      else if (t <= 10) level = 'warn';
+    }
+    if (level !== this.lastTimerLevel) {
+      this.timerEl.classList.remove('warn', 'critical');
+      if (level) this.timerEl.classList.add(level);
+      this.lastTimerLevel = level;
     }
 
     // 钥匙
-    if (data.keysTotal > 0) {
-      this.keysEl.style.display = '';
-      const v = this.keysEl.querySelector('.value') as HTMLElement;
-      v.textContent = `${data.keysCollected}/${data.keysTotal}`;
-    } else {
-      this.keysEl.style.display = 'none';
+    const keysVisible = data.keysTotal > 0;
+    if (keysVisible !== this.lastKeysVisible) {
+      this.keysEl.style.display = keysVisible ? '' : 'none';
+      this.lastKeysVisible = keysVisible;
+    }
+    if (keysVisible) {
+      const keysText = `${data.keysCollected}/${data.keysTotal}`;
+      if (keysText !== this.lastKeysText) {
+        this.keysValueEl.textContent = keysText;
+        this.lastKeysText = keysText;
+      }
     }
 
     // 静音
-    this.muteBtn.textContent = data.muted ? '🔇' : '🔊';
+    if (data.muted !== this.lastMuted) {
+      this.muteBtn.textContent = data.muted ? '🔇' : '🔊';
+      this.lastMuted = data.muted;
+    }
   }
 
   showToast(text: string, duration = 1600): void {
@@ -240,6 +281,13 @@ export class Hud {
 
   show(): void {
     this.root.style.display = '';
+    // 重新展示时清空 diff 缓存，确保下一次 update 必定写入一次（避免显示陈旧值）
+    this.lastTimerText = '';
+    this.lastKeysText = '';
+    this.lastTimerLevel = '';
+    this.lastKeysVisible = false;
+    this.lastMuted = null;
+    this.lastDarkTheme = null;
   }
 
   hide(): void {

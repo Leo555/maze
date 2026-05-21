@@ -49,19 +49,22 @@ export class ParticleSystem {
   }
 
   update(dt: number): void {
-    for (let i = this.particles.length - 1; i >= 0; i--) {
-      const p = this.particles[i];
+    // 双指针原地压缩：避免 splice 的 O(n) 移位与频繁数组重建
+    const arr = this.particles;
+    let write = 0;
+    for (let read = 0; read < arr.length; read++) {
+      const p = arr[read];
       p.life += dt;
-      if (p.life >= p.maxLife) {
-        this.particles.splice(i, 1);
-        continue;
-      }
+      if (p.life >= p.maxLife) continue;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       // 阻尼
       p.vx *= 0.92;
       p.vy *= 0.92;
+      if (write !== read) arr[write] = p;
+      write++;
     }
+    if (write !== arr.length) arr.length = write;
   }
 
   draw(ctx: CanvasRenderingContext2D, cellSize: number, offsetX: number, offsetY: number): void {
