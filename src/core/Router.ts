@@ -22,8 +22,6 @@ export type Route =
 export class Router {
   private listener: ((route: Route) => void) | null = null;
   private current: Route = { name: 'menu' };
-  /** 由 navigate() 主动改 hash 时置 true，避免 hashchange 再回调一次 */
-  private suppressNext = false;
 
   start(onChange: (route: Route) => void): void {
     this.listener = onChange;
@@ -31,10 +29,12 @@ export class Router {
     // 首次进入：根据当前 hash 决定首屏（默认主菜单）
     this.current = parseHash(location.hash);
     // 规范化 URL：把空 hash / 非法 hash 写成 "#/"，但不新增历史栈
+    // 注意：replaceState **不会**触发 hashchange，所以这里不能设 suppressNext，
+    // 否则会错误地把后续第一次真正的 hashchange（用户点「开始游戏」时 navigate 触发的）吞掉，
+    // 表现为路由 URL 变了但页面停在主菜单。
     const expected = serializeHash(this.current);
     if (location.hash !== expected) {
       const url = `${location.pathname}${location.search}${expected}`;
-      this.suppressNext = true;
       history.replaceState(null, '', url);
     }
     this.listener(this.current);
@@ -78,10 +78,6 @@ export class Router {
   }
 
   private handleHashChange = (): void => {
-    if (this.suppressNext) {
-      this.suppressNext = false;
-      return;
-    }
     const route = parseHash(location.hash);
     this.current = route;
     this.listener?.(route);
