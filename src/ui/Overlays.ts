@@ -7,7 +7,12 @@
 
 import { audio } from '../core/Audio';
 import { storage } from '../core/Storage';
-import { levels } from '../config/levels';
+import {
+  levels,
+  CHAPTER_COUNT,
+  LEVELS_PER_CHAPTER,
+  getChapterOf,
+} from '../config/levels';
 import { themes } from '../config/theme';
 import { formatTimePrecise } from '../core/utils';
 
@@ -110,7 +115,7 @@ export function showMainMenu(handlers: {
   card.className = 'scene-card';
   card.innerHTML = `
     <div class="scene-title">晨 雾 迷 径</div>
-    <div class="scene-subtitle">M I S T Y &nbsp;·&nbsp; P A T H &nbsp;·&nbsp; D A W N</div>
+    <div class="scene-subtitle">MISTY · PATH · DAWN</div>
   `;
 
   // 进度行
@@ -123,12 +128,12 @@ export function showMainMenu(handlers: {
     `;
   } else if (progress.fresh) {
     progressEl.innerHTML = `
-      <div class="progress-line main">即 将 开 始 · 第 ${progress.nextLevelId} 关 · ${progress.nextLevel.name}</div>
+      <div class="progress-line main">即 将 开 始 · ${progress.nextLevel.name}</div>
       <div class="progress-line sub">共 ${progress.total} 关 等 你 探 索</div>
     `;
   } else {
     progressEl.innerHTML = `
-      <div class="progress-line main">下 一 关 · 第 ${progress.nextLevelId} 关 · ${progress.nextLevel.name}</div>
+      <div class="progress-line main">下 一 关 · ${progress.nextLevel.name}</div>
       <div class="progress-line sub">已 通 关 ${progress.cleared} / ${progress.total} &nbsp;·&nbsp; ★ ${progress.stars} / ${progress.starsMax}</div>
       <div class="progress-bar"><div class="progress-bar-fill" style="width:${(progress.cleared / progress.total) * 100}%"></div></div>
     `;
@@ -143,11 +148,11 @@ export function showMainMenu(handlers: {
   // 按钮文案：根据进度状态变化
   let playLabel: string;
   if (progress.allCleared) {
-    playLabel = '重 新 挑 战 · 第 1 关';
+    playLabel = '重 新 挑 战';
   } else if (progress.fresh) {
     playLabel = '开 始 游 戏';
   } else {
-    playLabel = `继 续 · 第 ${progress.nextLevelId} 关`;
+    playLabel = `继 续 · ${progress.nextLevel.name}`;
   }
   playBtn.textContent = playLabel;
   attachClickSfx(playBtn);
@@ -176,6 +181,8 @@ export function showMainMenu(handlers: {
 
 // ==================== 关卡选择 ====================
 export function showLevelSelect(handlers: {
+  /** 是否从游戏内进入：true 时「返回」回到当前关卡而非主菜单 */
+  inGame?: boolean;
   onSelect: (levelId: number) => void;
   onBack: () => void;
 }): void {
@@ -184,46 +191,130 @@ export function showLevelSelect(handlers: {
   const scene = document.createElement('div');
   scene.className = 'scene';
   const card = document.createElement('div');
-  card.className = 'scene-card';
+  card.className = 'scene-card scene-card-wide';
   card.innerHTML = `
     <div class="scene-title">关  卡</div>
     <div class="scene-subtitle">SELECT YOUR JOURNEY</div>
   `;
 
-  const grid = document.createElement('div');
-  grid.className = 'level-grid';
+  // 章节滚动容器：顶部章节标签栏（点击快速跳转） + 章节分组列表
+  const navBar = document.createElement('div');
+  navBar.className = 'chapter-nav';
 
-  for (const lv of levels) {
-    const tile = document.createElement('div');
-    tile.className = 'level-tile';
-    const unlocked = storage.isUnlocked(lv.id);
-    if (!unlocked) tile.classList.add('locked');
+  const list = document.createElement('div');
+  list.className = 'chapter-list';
 
-    const theme = themes[lv.theme];
-    tile.style.background = theme.bg;
-    tile.style.color = theme.hudFg;
+  // 找到一个合适的「初始焦点章节」：第一个未通关的关卡所在章节
+  let focusChapter = 1;
+  const firstUnplayed = levels.find((lv) => {
+    const r = storage.getRecord(lv.id);
+    return storage.isUnlocked(lv.id) && (!r || !r.cleared);
+  });
+  if (firstUnplayed) focusChapter = getChapterOf(firstUnplayed.id).index;
 
-    const record = storage.getRecord(lv.id);
-    const stars = record?.bestStars ?? 0;
-    const starStr = '★'.repeat(stars) + '☆'.repeat(3 - stars);
+  // 章节分组渲染
+  for (let ci = 1; ci <= CHAPTER_COUNT; ci++) {
+    const chapterStart = (ci - 1) * LEVELS_PER_CHAPTER + 1;
+    const chapterEnd = ci * LEVELS_PER_CHAPTER;
+    const chapter = getChapterOf(chapterStart);
+    const theme = themes[chapter.theme];
 
-    tile.innerHTML = `
-      <div class="num">${unlocked ? lv.id : '🔒'}</div>
-      <div class="name">${lv.name}</div>
-      <div class="stars">${unlocked && record ? starStr : ''}</div>
-    `;
-    if (unlocked) {
-      attachClickSfx(tile);
-      tile.onclick = () => handlers.onSelect(lv.id);
+    // 该章节通关数 / 星数
+    let chCleared = 0;
+    let chStars = 0;
+    for (let id = chapterStart; id <= chapterEnd; id++) {
+      const r = storage.getRecord(id);
+      if (r?.cleared) {
+        chCleared++;
+        chStars += r.bestStars;
+      }
     }
-    grid.appendChild(tile);
+    const chapterUnlocked = storage.isUnlocked(chapterStart);
+
+    // 章节标签（顶部 nav）
+    const navItem = document.createElement('button');
+    navItem.className = 'chapter-nav-item';
+    if (!chapterUnlocked) navItem.classList.add('locked');
+    navItem.style.setProperty('--chapter-color', theme.exit);
+    navItem.innerHTML = `
+      <span class="ci">${ci}</span>
+      <span class="cn">${chapter.name}</span>
+    `;
+    navItem.dataset.chapter = String(ci);
+    attachClickSfx(navItem);
+    navItem.onclick = () => {
+      const target = list.querySelector<HTMLElement>(
+        `[data-chapter-section="${ci}"]`
+      );
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+    navBar.appendChild(navItem);
+
+    // 章节分区
+    const section = document.createElement('div');
+    section.className = 'chapter-section';
+    section.dataset.chapterSection = String(ci);
+    if (!chapterUnlocked) section.classList.add('locked');
+
+    const header = document.createElement('div');
+    header.className = 'chapter-header';
+    header.style.setProperty('--chapter-color', theme.exit);
+    header.innerHTML = `
+      <div class="chapter-title-row">
+        <span class="ci">第 ${ci} 章</span>
+        <span class="cn">${chapter.name}</span>
+        <span class="cs">${chapter.subtitle}</span>
+      </div>
+      <div class="chapter-meta">
+        ${
+          chapterUnlocked
+            ? `已通关 ${chCleared} / ${LEVELS_PER_CHAPTER} · ★ ${chStars} / ${LEVELS_PER_CHAPTER * 3}`
+            : '🔒 通关上一章节解锁'
+        }
+      </div>
+    `;
+    section.appendChild(header);
+
+    const grid = document.createElement('div');
+    grid.className = 'level-grid';
+    for (let id = chapterStart; id <= chapterEnd; id++) {
+      const lv = levels[id - 1];
+      const tile = document.createElement('div');
+      tile.className = 'level-tile';
+      const unlocked = storage.isUnlocked(lv.id);
+      if (!unlocked) tile.classList.add('locked');
+
+      tile.style.background = theme.bg;
+      tile.style.color = theme.hudFg;
+
+      const record = storage.getRecord(lv.id);
+      const stars = record?.bestStars ?? 0;
+      const starStr = '★'.repeat(stars) + '☆'.repeat(3 - stars);
+
+      // 显示章内编号 ci-pos，更易于辨识；锁定时显示锁
+      const pos = ((lv.id - 1) % LEVELS_PER_CHAPTER) + 1;
+      tile.innerHTML = `
+        <div class="num">${unlocked ? `${ci}-${pos}` : '🔒'}</div>
+        <div class="name">${unlocked ? `Lv.${lv.id}` : ''}</div>
+        <div class="stars">${unlocked && record ? starStr : ''}</div>
+      `;
+      if (unlocked) {
+        attachClickSfx(tile);
+        tile.onclick = () => handlers.onSelect(lv.id);
+      }
+      grid.appendChild(tile);
+    }
+    section.appendChild(grid);
+    list.appendChild(section);
   }
 
-  card.appendChild(grid);
+  card.appendChild(navBar);
+  card.appendChild(list);
 
   const back = document.createElement('button');
   back.className = 'btn';
-  back.textContent = '返  回';
+  // 游戏中进入选关页：按钮文案改为「返回游戏」，更直观
+  back.textContent = handlers.inGame ? '返 回 游 戏' : '返  回';
   attachClickSfx(back);
   back.onclick = () => handlers.onBack();
   const wrap = document.createElement('div');
@@ -233,12 +324,24 @@ export function showLevelSelect(handlers: {
 
   scene.appendChild(card);
   showOverlay(scene);
+
+  // 渲染后滚动到当前章节，让玩家立刻看到「下一关」附近
+  requestAnimationFrame(() => {
+    const target = list.querySelector<HTMLElement>(
+      `[data-chapter-section="${focusChapter}"]`
+    );
+    target?.scrollIntoView({ behavior: 'auto', block: 'start' });
+    navBar
+      .querySelector<HTMLElement>(`[data-chapter="${focusChapter}"]`)
+      ?.classList.add('active');
+  });
 }
 
 // ==================== 暂停菜单 ====================
 export function showPauseMenu(handlers: {
   onResume: () => void;
   onRestart: () => void;
+  onSelectLevel: () => void;
   onMenu: () => void;
 }): void {
   audio.playSfx('ui_open');
@@ -273,6 +376,15 @@ export function showPauseMenu(handlers: {
     handlers.onRestart();
   };
 
+  const select = document.createElement('button');
+  select.className = 'btn';
+  select.textContent = '选 择 关 卡';
+  attachClickSfx(select);
+  select.onclick = () => {
+    audio.unduckBgm(300);
+    handlers.onSelectLevel();
+  };
+
   const menu = document.createElement('button');
   menu.className = 'btn';
   menu.textContent = '主 菜 单';
@@ -281,6 +393,7 @@ export function showPauseMenu(handlers: {
 
   btnGroup.appendChild(resume);
   btnGroup.appendChild(restart);
+  btnGroup.appendChild(select);
   btnGroup.appendChild(menu);
   card.appendChild(btnGroup);
   scene.appendChild(card);

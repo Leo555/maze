@@ -139,14 +139,25 @@ export class Game {
       case 'settings':
         this.renderSettings();
         break;
-      case 'play':
+      case 'play': {
         // 校验关卡是否存在 / 已解锁，否则回到主菜单
         if (!this.canPlay(route.levelId)) {
           router.navigate({ name: 'menu' }, { replace: true });
           return;
         }
+        // 当前已经持有同一关卡且没有结束（未进入 transition）→ 仅恢复 UI 即可，
+        // 避免「从暂停页/选关页返回」时重启关卡导致的进度丢失
+        const isResume =
+          this.level !== null &&
+          this.currentLevelId === route.levelId &&
+          this.state !== 'transition';
+        if (isResume) {
+          this.resume();
+          return;
+        }
         this.startLevel(route.levelId);
         break;
+      }
     }
   }
 
@@ -169,12 +180,29 @@ export class Game {
   }
 
   private renderLevelSelect(): void {
-    this.state = 'menu';
-    this.cleanupLevel();
+    // 关键：不能 cleanupLevel！如果用户从游戏内进入选关页，关卡数据需要保留，
+    // 这样「返回游戏」才能继续玩；「选其它关」时由 startLevel 自然替换。
+    // 仅切到 'menu' / 'settings' 时才需要清理。
+    const inGame = this.level !== null && this.state !== 'transition';
+    if (inGame) {
+      // 游戏中暂时进入选关页：状态视作 paused，玩家不会继续移动
+      this.state = 'paused';
+    } else {
+      this.state = 'menu';
+    }
     this.hud.hide();
     showLevelSelect({
+      inGame,
       onSelect: (id) => router.navigate({ name: 'play', levelId: id }),
-      onBack: () => router.navigate({ name: 'menu' }),
+      onBack: () => {
+        if (inGame) {
+          // 返回到当前正在玩的关卡（路由保持不变，仅恢复 UI）
+          audio.unduckBgm(300);
+          router.navigate({ name: 'play', levelId: this.currentLevelId });
+        } else {
+          router.navigate({ name: 'menu' });
+        }
+      },
     });
   }
 
@@ -254,13 +282,17 @@ export class Game {
         hideOverlay();
         this.startLevel(this.currentLevelId);
       },
+      onSelectLevel: () => router.navigate({ name: 'levels' }),
       onMenu: () => router.navigate({ name: 'menu' }),
     });
   }
 
   resume(): void {
     hideOverlay();
+    // 恢复 BGM（pause/选关期可能 duck 过；幂等调用）
+    audio.unduckBgm(300);
     this.state = 'playing';
+    this.hud.show();
   }
 
   // ============ 玩家事件 ============
@@ -499,10 +531,10 @@ export class Game {
         reveal
       );
     } else {
-      // 菜单期间画一个简洁背景
+      // 菜单期间画一个简洁背景（浅色主题主调）
       const ctx = this.renderer.ctx;
       ctx.save();
-      ctx.fillStyle = '#0d1117';
+      ctx.fillStyle = '#f5efe6';
       ctx.fillRect(0, 0, this.renderer.canvas.width, this.renderer.canvas.height);
       ctx.restore();
     }

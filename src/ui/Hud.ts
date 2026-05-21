@@ -30,6 +30,27 @@ function isTouchDevice(): boolean {
   );
 }
 
+/**
+ * 简易明亮判定：返回 true 表示颜色偏「亮」（适合放在深色背景上）。
+ * 用相对亮度公式 (0.299R + 0.587G + 0.114B) 判定，阈值 160。
+ * 仅支持 #rgb / #rrggbb 颜色字符串。
+ */
+function isLightColor(color: string): boolean {
+  let hex = color.trim().replace('#', '');
+  if (hex.length === 3) {
+    hex = hex
+      .split('')
+      .map((c) => c + c)
+      .join('');
+  }
+  if (hex.length !== 6) return false;
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+  return lum > 160;
+}
+
 export class Hud {
   root: HTMLElement;
   private topBar!: HTMLElement;
@@ -197,6 +218,12 @@ export class Hud {
     this.root.style.setProperty('--hud-fg', data.theme.hudFg);
     this.root.style.setProperty('--accent', data.theme.exit);
 
+    // 根据主题文字色推断主题明暗，给 HUD 元素自动选择合适的背景：
+    //   - 浅色主题（hudFg 偏深，relativeLuminance < 0.5）：用半透明白底
+    //   - 深色主题（hudFg 偏浅）：用半透明黑底
+    // 这样在所有关卡下 HUD 文字都能保持高对比度
+    const isDarkTheme = isLightColor(data.theme.hudFg);
+    this.root.classList.toggle('hud-dark-theme', isDarkTheme);
     // 计时器
     const t = Math.max(0, data.time);
     const valueEl = this.timerEl.querySelector('.value') as HTMLElement;
