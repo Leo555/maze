@@ -33,7 +33,7 @@ import {
   showOptimalReview,
   hideOverlay,
 } from '../ui/Overlays';
-import { randomSeed } from '../core/utils';
+import { seedForLevel } from '../core/utils';
 import { EasterEgg } from './EasterEgg';
 import { playGoalCelebration } from '../fx/Celebration';
 import { shortestPath, shortestPathThroughWaypoints } from '../maze/Generator';
@@ -267,7 +267,10 @@ export class Game {
     hideOverlay();
     const config = getLevel(levelId);
     this.currentLevelId = levelId;
-    const seed = randomSeed();
+    // 同一 levelId 始终生成同一迷宫布局（刷新页面 / 不同设备 / 不同用户都一致），
+    // 便于与他人交流路径与对比策略。如果未来要做"挑战模式 / 每日随机"，
+    // 可改为 (seedForLevel(levelId) ^ dailySalt) 等可重放方案。
+    const seed = seedForLevel(levelId);
     this.level = buildLevel(config, seed);
     this.player = new Player(this.level.maze.start.x, this.level.maze.start.y);
 
