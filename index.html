@@ -6,6 +6,14 @@
     <meta name="theme-color" content="#F5EFE6" />
 
     <!--
+      性能：第三方域名预连接
+      Vercel Analytics 会从 va.vercel-scripts.com 加载脚本，
+      提前 DNS 解析 + TCP 握手，减少 ~100-300ms 首次请求延迟
+    -->
+    <link rel="dns-prefetch" href="//va.vercel-scripts.com" />
+    <link rel="preconnect" href="https://va.vercel-scripts.com" crossorigin />
+
+    <!--
       SEO 基础：标题 + 描述 + 关键词
       标题尽量包含主关键词在前 30 字符内，便于搜索引擎截断后仍命中
     -->
@@ -62,30 +70,9 @@
     <!--
       结构化数据（JSON-LD）：声明这是一款 VideoGame
       Google 可据此在搜索结果中显示更丰富的卡片
+      （已 minify，scrapers 解析不需要缩进）
     -->
-    <script type="application/ld+json">
-      {
-        "@context": "https://schema.org",
-        "@type": "VideoGame",
-        "name": "晨雾迷径",
-        "alternateName": "Misty Path Dawn",
-        "url": "https://maze.lz5z.com/",
-        "image": "https://maze.lz5z.com/og-cover.png",
-        "description": "唯美风格的浏览器迷宫解谜游戏，含 10 章节 100 关，挑战最佳通关步数与三星评级。",
-        "genre": ["Puzzle", "Maze", "Casual"],
-        "inLanguage": "zh-CN",
-        "applicationCategory": "Game",
-        "operatingSystem": "Any (Web Browser)",
-        "gamePlatform": "Web Browser",
-        "playMode": "SinglePlayer",
-        "offers": {
-          "@type": "Offer",
-          "price": "0",
-          "priceCurrency": "CNY",
-          "availability": "https://schema.org/InStock"
-        }
-      }
-    </script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"VideoGame","name":"晨雾迷径","alternateName":"Misty Path Dawn","url":"https://maze.lz5z.com/","image":"https://maze.lz5z.com/og-cover.png","description":"唯美风格的浏览器迷宫解谜游戏，含 10 章节 100 关，挑战最佳通关步数与三星评级。","genre":["Puzzle","Maze","Casual"],"inLanguage":"zh-CN","applicationCategory":"Game","operatingSystem":"Any (Web Browser)","gamePlatform":"Web Browser","playMode":"SinglePlayer","offers":{"@type":"Offer","price":"0","priceCurrency":"CNY","availability":"https://schema.org/InStock"}}</script>
   </head>
   <body>
     <!-- 给搜索引擎与禁用 JS 的访客一段可读的 HTML 文本，提升页面"内容质量"信号 -->
