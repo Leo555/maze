@@ -3,11 +3,15 @@
   Sitemap：当前是 SPA（hash 路由），每条 URL 都会进入主页面再由前端路由分发。
   搜索引擎通常无法索引 hash 后的内容（#/levels 等），但展示主页本身已足够。
   如果未来切到 history 路由，可在此处补全各章节关卡的 url。
+
+  lastmod：明确告诉搜索引擎页面最近更新时间，是 Google 决定"是否重新抓取"的核心信号
+  changefreq：weekly 比 monthly 能争取更高的抓取频率（仅是建议，最终由爬虫策略决定）
 -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://maze.lz5z.com/</loc>
-    <changefreq>monthly</changefreq>
+    <lastmod>2026-05-27</lastmod>
+    <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
 </urlset>
