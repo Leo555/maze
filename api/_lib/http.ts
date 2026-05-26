@@ -60,11 +60,20 @@ export function json(
   res.send(JSON.stringify(body));
 }
 
-/** 简易同源校验：拒绝非本站域名的写请求 */
+/**
+ * 同源校验：仅拒绝跨域来源的写请求。
+ *
+ * ALLOWED_ORIGIN 环境变量支持多个值（逗号分隔）；
+ * 比较时去掉末尾斜杠与首尾空白，避免人为配置失误。
+ *
+ * 不带 Origin 头的请求一律放行（同源 form 提交、Service Worker、原生 App webview 都不带）。
+ */
 export function checkOrigin(req: VercelRequest): boolean {
-  const allowed = process.env.ALLOWED_ORIGIN || 'https://maze.lz5z.com';
   const origin = req.headers.origin;
-  // 允许无 origin（同源 form 提交、手机 App webview）
   if (!origin) return true;
-  return origin === allowed;
+
+  const normalize = (s: string): string => s.trim().replace(/\/+$/, '').toLowerCase();
+  const allowedRaw = process.env.ALLOWED_ORIGIN || 'https://maze.lz5z.com';
+  const allowList = allowedRaw.split(',').map(normalize).filter(Boolean);
+  return allowList.includes(normalize(origin));
 }
