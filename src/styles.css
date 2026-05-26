@@ -749,6 +749,21 @@ body {
   padding: 8px 10px;
   min-width: 0;
 }
+/* 解除关联 - 次要操作，独占一行、低饱和 */
+.settings-sync .sync-unlink {
+  width: 100%;
+  font-size: 11px;
+  padding: 6px 10px;
+  margin-top: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px dashed var(--border);
+}
+.settings-sync .sync-unlink:hover,
+.settings-sync .sync-unlink:active {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
 
 /* ========== 最佳路径观察模式 浮窗 ========== */
 /*

@@ -30,6 +30,13 @@ export interface SaveData {
 
 const KEY = 'maze_save';
 const COOKIE_KEY = 'maze_save';
+/**
+ * "已关联编号"持久化 key（独立于 maze_save，单独存）。
+ * 这个值是用户在任何端"知道"的同步编号——
+ * 微信里授权后会写入；PC 端输入编号恢复进度后也会写入。
+ * 与 cloudCode 不同：cloudCode 仅在带有合法 maze_uid cookie 时才有意义（能写云端）。
+ */
+const LINKED_CODE_KEY = 'maze_linked_code';
 const SAVE_VERSION = 1;
 /** cookie 有效期：400 天（Chrome 上 cookie max-age 的硬上限是 400 天） */
 const COOKIE_MAX_AGE_SECONDS = 400 * 24 * 60 * 60;
@@ -130,17 +137,49 @@ export function pickRicher(a: SaveData, b: SaveData): SaveData {
 
 export class Storage {
   private data: SaveData;
-  /** 用户的 8 位同步编号（从云端拉到后填入；空表示尚未关联微信） */
+  /**
+   * 用户的 8 位同步编号 - "可写"模式。
+   * 仅当带有合法 maze_uid cookie（已通过微信授权）时才有值，
+   * 此时通关会触发云端上行（push）。
+   * 普通浏览器输入编号恢复进度时此值仍为空——因为 PC 端无权写云端。
+   */
   private cloudCode = '';
+  /**
+   * 用户已知的 8 位同步编号 - "可见"模式。
+   * 比 cloudCode 范围更大：
+   *   - 微信里授权 → 同时写 cloudCode + linkedCode
+   *   - PC 端输入编号恢复进度 → 仅写 linkedCode（不写 cloudCode）
+   * 用于 UI 在"任何端"都能展示用户的编号方便复制/再分享。
+   * 持久化到 localStorage，关闭浏览器再打开仍可见。
+   */
+  private linkedCode = '';
   /** 监听器：进度变更时调用（用于 UI 自动刷新） */
   private listeners = new Set<() => void>();
 
   constructor() {
     this.data = this.load();
+    this.linkedCode = this.loadLinkedCode();
     // 启动时同步两边：哪边缺就用另一边补回来（应对 ITP 单边清理）
     this.flushLocal();
     // 启动时异步拉云端进度（如果 cookie 已绑定），完成后合并并通知监听器
     void this.bootstrapCloud();
+  }
+
+  private loadLinkedCode(): string {
+    try {
+      return localStorage.getItem(LINKED_CODE_KEY) || '';
+    } catch {
+      return '';
+    }
+  }
+
+  private saveLinkedCode(code: string): void {
+    try {
+      if (code) localStorage.setItem(LINKED_CODE_KEY, code);
+      else localStorage.removeItem(LINKED_CODE_KEY);
+    } catch {
+      /* ignore */
+    }
   }
 
   /** 启动时拉云端：cookie 有效时取「云端 vs 本地」更进度的一份 */
@@ -148,6 +187,11 @@ export class Storage {
     const me = await cloud.fetchMine();
     if (!me) return;
     this.cloudCode = me.code;
+    // 同步到 linkedCode（保证 UI 在微信端也能稳定显示）
+    if (this.linkedCode !== me.code) {
+      this.linkedCode = me.code;
+      this.saveLinkedCode(me.code);
+    }
     const remote = normalizeSave(me.progress);
     if (remote) {
       const merged = pickRicher(this.data, remote);
@@ -259,20 +303,49 @@ export class Storage {
     this.notifyChange();
   }
 
-  /** 当前用户的 8 位编号（空字符串表示未关联微信） */
+  /**
+   * 当前用户的 8 位编号（仅当 cookie 已绑定，可写云端）。
+   * 若仅 PC 输入编号恢复，此处仍是空——区别于 getLinkedCode()。
+   */
   getCloudCode(): string {
     return this.cloudCode;
   }
 
-  /** 用一份外部存档（如 pullByCode 拿到的）合并进本地，取更进度 */
-  mergeRemote(remote: SaveData): boolean {
+  /**
+   * 用户已知的 8 位编号（含 PC 端输入恢复后保存的）。
+   * UI 凡是只想"展示编号给用户看/复制"的场景，都应该用这个。
+   */
+  getLinkedCode(): string {
+    return this.linkedCode;
+  }
+
+  /**
+   * 用一份外部存档（如 pullByCode 拿到的）合并进本地，取更进度。
+   * @param code 可选；若提供则同时持久化到 linkedCode（PC 端输入恢复后调用）
+   */
+  mergeRemote(remote: SaveData, code?: string): boolean {
     const merged = pickRicher(this.data, remote);
     const changed = JSON.stringify(merged) !== JSON.stringify(this.data);
-    if (!changed) return false;
-    this.data = merged;
-    this.flush();
+    if (changed) {
+      this.data = merged;
+      this.flush();
+    }
+    let codeChanged = false;
+    if (code && /^\d{8}$/.test(code) && code !== this.linkedCode) {
+      this.linkedCode = code;
+      this.saveLinkedCode(code);
+      codeChanged = true;
+    }
+    if (changed || codeChanged) this.notifyChange();
+    return changed;
+  }
+
+  /** 解除编号关联（仅清理本地展示，不影响云端数据；登出时调用） */
+  unlinkCode(): void {
+    this.cloudCode = '';
+    this.linkedCode = '';
+    this.saveLinkedCode('');
     this.notifyChange();
-    return true;
   }
 
   /** 订阅数据变更（用于 UI 自动刷新） */
