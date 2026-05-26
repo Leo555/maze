@@ -2,7 +2,15 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <!--
+      viewport：
+        - user-scalable=no + maximum-scale=1：阻止双指缩放（iOS Safari 会忽略此项，需配合 main.ts 的事件拦截）
+        - viewport-fit=cover：iPad / 全面屏 iPhone 充满刘海与圆角，避免系统加白边
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
     <meta name="theme-color" content="#F5EFE6" />
 
     <!--
