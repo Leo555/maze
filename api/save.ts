@@ -17,9 +17,9 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { readUidCookie, json, checkOrigin } from './_lib/http';
-import { getUser, updateUserProgress } from './_lib/kv';
-import { normalizeSave, pickRicher } from '../shared/types';
+import { readUidCookie, json, checkOrigin } from './_lib/http.js';
+import { getUser, updateUserProgress } from './_lib/kv.js';
+import { normalizeSave, pickRicher } from '../shared/types.js';
 
 export default async function handler(
   req: VercelRequest,

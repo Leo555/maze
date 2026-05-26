@@ -11,8 +11,8 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { json } from '../_lib/http';
-import { buildAuthUrl } from '../_lib/wx';
+import { json } from '../_lib/http.js';
+import { buildAuthUrl } from '../_lib/wx.js';
 
 export default async function handler(
   req: VercelRequest,

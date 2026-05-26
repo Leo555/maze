@@ -15,8 +15,8 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { kv } from '@vercel/kv';
-import { json } from './_lib/http';
-import { getOpenidByCode, getUser } from './_lib/kv';
+import { json } from './_lib/http.js';
+import { getOpenidByCode, getUser } from './_lib/kv.js';
 
 const RATE_LIMIT_WINDOW_SEC = 300; // 5 分钟
 const RATE_LIMIT_MAX = 30; // 5 分钟内最多 30 次（防爆破）

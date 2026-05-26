@@ -13,7 +13,7 @@
  */
 
 import { kv } from '@vercel/kv';
-import type { CloudUser, CloudCodeIndex, SaveData } from '../../shared/types';
+import type { CloudUser, CloudCodeIndex, SaveData } from '../../shared/types.js';
 
 const COUNTER_KEY = 'meta:codeCounter';
 const COUNTER_START = 10000000;

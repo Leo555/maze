@@ -14,10 +14,10 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { exchangeOpenid } from '../_lib/wx';
-import { ensureUser } from '../_lib/kv';
-import { setUidCookie, json } from '../_lib/http';
-import { DEFAULT_SAVE } from '../../shared/types';
+import { exchangeOpenid } from '../_lib/wx.js';
+import { ensureUser } from '../_lib/kv.js';
+import { setUidCookie, json } from '../_lib/http.js';
+import { DEFAULT_SAVE } from '../../shared/types.js';
 
 export default async function handler(
   req: VercelRequest,

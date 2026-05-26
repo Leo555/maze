@@ -10,8 +10,8 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { readUidCookie, json } from './_lib/http';
-import { getUser } from './_lib/kv';
+import { readUidCookie, json } from './_lib/http.js';
+import { getUser } from './_lib/kv.js';
 
 export default async function handler(
   req: VercelRequest,
