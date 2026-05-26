@@ -11,6 +11,7 @@ import { Game } from './core/Game';
 import { isInWeChat, isStandalone } from './core/Environment';
 import { maybeShowAddToHomeScreen } from './ui/AddToHomeScreen';
 import { fetchAuthUrl } from './core/CloudSync';
+import { showToast } from './ui/Toast';
 
 // === 全局环境标记（CSS 可针对 body[data-env] 做差异化样式）===
 // 在游戏初始化前打标，让首次绘制就带着正确的环境信息
@@ -125,14 +126,13 @@ if (justReturned) {
     if (code) {
       // 延迟到 Game 启动完后再展示，避免与启动动画重叠
       setTimeout(() => {
-        // 用最简单的 alert 兜底；后续可以接 Toast
-        // 注：alert 会同步阻断主线程，但用户主动的"我刚授权"瞬间无所谓
-        try {
-          // eslint-disable-next-line no-alert
-          alert(`同步成功！你的进度编号：${code}\n请截图保存，在其他设备输入即可恢复进度。`);
-        } catch {
-          /* ignore */
-        }
+        // 用全局 toast 取代原本的 alert（阻塞 + 丑），并把停留时间拉长到 5 秒
+        // 让用户来得及看清编号；与 Hud 内部 toast 互不干扰
+        showToast(
+          `同步成功！你的进度编号：${code}\n请截图保存，在其他设备输入即可恢复进度`,
+          'success',
+          5000
+        );
       }, 800);
     }
   }

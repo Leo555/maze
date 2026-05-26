@@ -9,6 +9,7 @@ import { audio } from '../core/Audio';
 import { storage } from '../core/Storage';
 import { isInWeChat } from '../core/Environment';
 import { fetchAuthUrl, pullByCode, pushImmediate } from '../core/CloudSync';
+import { showToast } from './Toast';
 import {
   levels,
   CHAPTER_COUNT,
@@ -674,7 +675,7 @@ export function showSettings(onBack: () => void): void {
   resetBtn.onclick = () => {
     if (confirm('确定要清除所有通关记录吗？此操作不可恢复。')) {
       storage.reset();
-      alert('已清除');
+      showToast('已清除通关记录', 'success');
     }
   };
   resetRow.appendChild(resetBtn);
@@ -757,7 +758,8 @@ function buildSyncPanel(): HTMLElement {
           copyBtn.textContent = '已 复 制 ✓';
           setTimeout(() => (copyBtn.textContent = '复 制 编 号'), 1500);
         } catch {
-          alert(`你的同步编号：${linkedCode}\n请手动复制`);
+          // 部分浏览器无 clipboard API（http / 老 Safari），用 toast 兜底展示编号
+          showToast(`你的同步编号：${linkedCode}\n请手动长按复制`, 'info', 4000);
         }
       };
       btnRow.appendChild(copyBtn);
@@ -807,7 +809,7 @@ function buildSyncPanel(): HTMLElement {
       bindBtn.onclick = async () => {
         const url = await fetchAuthUrl();
         if (url) location.replace(url);
-        else alert('云同步暂未配置，请稍后重试');
+        else showToast('云同步暂未配置，请稍后重试', 'error');
       };
       wrap.appendChild(bindBtn);
     } else {
@@ -849,16 +851,17 @@ function buildSyncPanel(): HTMLElement {
 
 /** 弹窗输入编号 → 拉取进度 → 合并到本地 + 持久化编号 */
 async function promptCodeAndPull(refresh: () => void): Promise<void> {
+  // prompt 仍保留：toast 是单向提示，不能输入；输入仍需 prompt 阻塞调用
   const code = prompt('请输入 8 位同步编号：');
   if (!code) return;
   const trimmed = code.trim();
   if (!/^\d{8}$/.test(trimmed)) {
-    alert('编号格式错误，必须是 8 位数字');
+    showToast('编号格式错误，必须是 8 位数字', 'error');
     return;
   }
   const remote = await pullByCode(trimmed);
   if (!remote) {
-    alert('未找到该编号，请检查是否输入正确');
+    showToast('未找到该编号，请检查输入是否正确', 'error', 2400);
     return;
   }
   const changed = storage.mergeRemote(remote, trimmed);
@@ -867,9 +870,9 @@ async function promptCodeAndPull(refresh: () => void): Promise<void> {
     if (storage.getCloudCode()) {
       void pushImmediate(remote);
     }
-    alert('进度已恢复！');
+    showToast('进度已恢复！', 'success');
   } else {
-    alert('已是最新进度');
+    showToast('已是最新进度，无需更新', 'info');
   }
   refresh();
 }
