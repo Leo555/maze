@@ -1,25 +1,27 @@
 /**
- * 保存当前用户的云端进度（基于 HttpOnly cookie 中的 openid）
+ * POST /api/save
  *
- *   POST /api/save
- *   Body: { progress: SaveData }
+ * 凭 maze_auth cookie 上行进度。
  *
- * 响应：
- *   200 { code, progress }    保存成功（返回服务端最终的进度，已 merge）
- *   400 { error: 'bad_request' }  请求体格式错
- *   401 { error: 'unauthenticated' }  无 cookie
- *   403 { error: 'forbidden' }    跨域来源
- *
- * 合并策略：
- *   服务端取「客户端上传 vs 服务端已有」中"更进度"的一份。
- *   这避免：用户在 A 设备通到 50 关，B 设备进度只到 10 关时上行
- *   覆盖了服务端的 50 关数据。
+ * 服务端会做 pickRicher 仲裁：
+ *   - 拿当前云端进度 vs 客户端上行的进度
+ *   - 取"更进度"的一份写回
+ *   - 这避免了多设备并发下"老进度回写覆盖新进度"的退化
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { readUidCookie, json, checkOrigin } from './_lib/http.js';
-import { getUser, updateUserProgress } from './_lib/kv.js';
+import { readAuthCookie, json, checkOrigin } from './_lib/http.js';
+import { getUserByToken, updateUserProgress } from './_lib/kv.js';
 import { normalizeSave, pickRicher } from '../shared/types.js';
+
+function safeJsonParse(s: string): { progress?: unknown } | null {
+  try {
+    const parsed = JSON.parse(s);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
 
 export default async function handler(
   req: VercelRequest,
@@ -34,14 +36,18 @@ export default async function handler(
     return;
   }
 
-  const openid = readUidCookie(req);
-  if (!openid) {
+  const auth = readAuthCookie(req);
+  if (!auth) {
+    json(res, 401, { error: 'unauthenticated' });
+    return;
+  }
+  const user = await getUserByToken(auth.userId, auth.token);
+  if (!user) {
     json(res, 401, { error: 'unauthenticated' });
     return;
   }
 
-  // Vercel Functions 默认会自动 parse JSON body 到 req.body（对象）；
-  // 但也支持以字符串形式接收，做双向兜底。
+  // 解析 body：兼容 string 或 object
   let body: { progress?: unknown } | null;
   if (typeof req.body === 'string') {
     body = safeJsonParse(req.body);
@@ -56,27 +62,11 @@ export default async function handler(
     return;
   }
 
-  const user = await getUser(openid);
-  if (!user) {
-    json(res, 401, { error: 'unauthenticated' });
-    return;
-  }
-
-  // 服务端做最终仲裁：取更进度的一份，避免回退覆盖
   const merged = pickRicher(user.progress, incoming);
-  const updated = await updateUserProgress(openid, merged);
-  if (!updated) {
-    json(res, 500, { error: 'save_failed' });
+  const next = await updateUserProgress(user.userId, merged);
+  if (!next) {
+    json(res, 500, { error: 'update_failed' });
     return;
   }
-
-  json(res, 200, { code: updated.code, progress: updated.progress });
-}
-
-function safeJsonParse(s: string): { progress?: unknown } | null {
-  try {
-    return JSON.parse(s);
-  } catch {
-    return null;
-  }
+  json(res, 200, { code: next.code, progress: next.progress });
 }

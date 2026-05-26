@@ -3,6 +3,12 @@
  *
  * 注意：本文件被前端（src/）和后端 API（api/）双向引用，
  * 所以不能依赖任何浏览器或 Node 专属 API。
+ *
+ * v2 账号模型（2025）：
+ *   - 不再以 openid 为主键；改用内部生成的 userId（UUID）
+ *   - 编号 code：公开凭证，可被他人输入只读拉取进度
+ *   - token：私密凭证（仅本设备持有，cookie 形式），写云端必须凭它
+ *   - openid：可选；微信授权后才有，用于跨设备通过微信再次拿到 token
  */
 
 export interface LevelRecord {
@@ -19,12 +25,21 @@ export interface SaveData {
   unlocked: number;
 }
 
-/** 云端用户记录（KV: user:{openid} 的值） */
+/**
+ * 云端用户记录（KV: user:{userId} 的值）
+ *
+ * userId 是内部主键（UUID v4 字符串），不暴露给前端。
+ * 前端只看到 code（展示用）；写云端时凭 token cookie。
+ */
 export interface CloudUser {
-  /** 微信 openid（用户唯一标识） */
-  openid: string;
-  /** 8 位数字编号（人类可读凭证） */
+  /** 内部主键（UUID）；不展示给用户 */
+  userId: string;
+  /** 8 位数字编号（公开凭证；可被他人只读引用） */
   code: string;
+  /** 私密 token（写云端的鉴权凭证；存浏览器 cookie + localStorage） */
+  token: string;
+  /** 微信 openid（可选；仅在微信授权过后才有） */
+  openid?: string;
   /** 进度数据 */
   progress: SaveData;
   /** 创建时间（ms） */
@@ -33,9 +48,15 @@ export interface CloudUser {
   updatedAt: number;
 }
 
-/** 云端编号反向索引（KV: code:{8位} 的值） */
+/** 编号 → userId 反向索引（KV: code:{8位} 的值） */
 export interface CloudCodeIndex {
-  openid: string;
+  userId: string;
+  createdAt: number;
+}
+
+/** openid → userId 反向索引（KV: openid:{openid} 的值，仅微信用户有） */
+export interface CloudOpenidIndex {
+  userId: string;
   createdAt: number;
 }
 
@@ -70,3 +91,13 @@ export const DEFAULT_SAVE: SaveData = {
   records: {},
   unlocked: 1,
 };
+
+/** 前端可见的账号信息（GET /api/me 与 init 响应） */
+export interface MeResponse {
+  /** 8 位编号 */
+  code: string;
+  /** 是否已绑定微信（仅做 UI 提示用） */
+  hasWx: boolean;
+  /** 当前进度 */
+  progress: SaveData;
+}

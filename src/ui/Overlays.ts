@@ -700,17 +700,20 @@ export function showSettings(onBack: () => void): void {
 /**
  * 构造「同步进度」面板，加在设置页里。
  *
- * 视图基于两个独立维度：
+ * 三个独立状态维度：
  *   - linkedCode：用户已知的编号（含 PC 输入恢复后保存的）
- *   - cloudCode：能写云端的身份（仅微信授权后存在）
+ *   - cloudCode：能写云端的身份（首次通关后自动 init 时写入；本机已注册账号）
+ *   - hasWx：当前账号是否已绑定微信 openid（仅做 UI 提示用）
  *
- * 状态决策表：
- *   linkedCode  cloudCode    显示
- *   ----------- ----------   --------
- *   有          有           [已绑定微信] 编号 + 复制 + 输入其他编号 + 解除关联
- *   有          无           [已恢复] 编号 + 复制 + 提示「在微信内打开可上行新进度」+ 输入其他编号 + 清除编号
- *   无          —— + 在微信   [关联] 关联微信同步按钮
- *   无          —— + 普通浏览器  [恢复] 输入编号恢复进度
+ * 状态决策（自顶向下匹配第一条满足的）：
+ *   1. linkedCode + cloudCode → 已注册账号
+ *      └ hasWx → "已绑定微信"，显示编号 + 二维码 + 解除微信关联
+ *      └ 在微信内（未绑微信）→ 编号 + 二维码 + 关联微信（让微信端永久能找回）
+ *      └ 普通浏览器 → 编号 + 二维码 + 输入其他编号
+ *   2. linkedCode + 没 cloudCode → 仅恢复模式（输入了别人的编号）
+ *      显示编号 + 输入其他编号 + 清除已恢复编号
+ *   3. 都没有 → 还没玩过 / 未通关
+ *      引导：通关 1 关后会自动有编号；或输入已有编号恢复进度
  */
 function buildSyncPanel(): HTMLElement {
   const wrap = document.createElement('div');
@@ -720,6 +723,7 @@ function buildSyncPanel(): HTMLElement {
     wrap.innerHTML = '';
     const linkedCode = storage.getLinkedCode();
     const cloudCode = storage.getCloudCode();
+    const hasWx = storage.getHasWx();
     const inWx = isInWeChat();
 
     // 标题行
@@ -728,21 +732,21 @@ function buildSyncPanel(): HTMLElement {
     title.textContent = '同步进度';
     wrap.appendChild(title);
 
-    if (linkedCode) {
-      // === 状态 1/2：已知编号 ===
+    if (linkedCode && cloudCode) {
+      // === 状态 1：已注册账号（本机能写云端）===
       const codeRow = document.createElement('div');
       codeRow.className = 'sync-code-row';
       codeRow.innerHTML = `
-        <div class="sync-code-label">${cloudCode ? '我的同步编号' : '已恢复编号'}</div>
+        <div class="sync-code-label">${hasWx ? '我的同步编号 · 已关联微信' : '我的同步编号'}</div>
         <div class="sync-code-value">${linkedCode}</div>
       `;
       wrap.appendChild(codeRow);
 
       const tip = document.createElement('div');
       tip.className = 'sync-tip';
-      tip.textContent = cloudCode
-        ? '在其他设备的本页输入此编号即可恢复进度'
-        : '当前为只读恢复模式；在微信内打开本页面以同步新进度';
+      tip.textContent = hasWx
+        ? '通关进度自动同步到云端；微信账号在任何设备打开本站都能找回'
+        : '通关进度自动同步到云端；其他设备输入此编号或扫码即可恢复';
       wrap.appendChild(tip);
 
       const btnRow = document.createElement('div');
@@ -758,7 +762,6 @@ function buildSyncPanel(): HTMLElement {
           copyBtn.textContent = '已 复 制 ✓';
           setTimeout(() => (copyBtn.textContent = '复 制 编 号'), 1500);
         } catch {
-          // 部分浏览器无 clipboard API（http / 老 Safari），用 toast 兜底展示编号
           showToast(`你的同步编号：${linkedCode}\n请手动长按复制`, 'info', 4000);
         }
       };
@@ -773,7 +776,7 @@ function buildSyncPanel(): HTMLElement {
 
       wrap.appendChild(btnRow);
 
-      // 第二行：二维码按钮（独占一行，作为辅助同步路径）
+      // 二维码按钮（独占一行）
       const qrBtn = document.createElement('button');
       qrBtn.className = 'btn sync-qr';
       qrBtn.textContent = '生 成 同 步 二 维 码';
@@ -781,50 +784,75 @@ function buildSyncPanel(): HTMLElement {
       qrBtn.onclick = () => showQrDialog(linkedCode);
       wrap.appendChild(qrBtn);
 
+      // 微信内未绑定 → 显示「关联微信」按钮（让此账号在跨设备微信中也能找回）
+      if (inWx && !hasWx) {
+        const bindBtn = document.createElement('button');
+        bindBtn.className = 'btn sync-bind-wx';
+        bindBtn.textContent = '关 联 微 信 ｜ 跨 设 备 找 回';
+        attachClickSfx(bindBtn);
+        bindBtn.onclick = async () => {
+          const url = await fetchAuthUrl();
+          if (url) location.replace(url);
+          else showToast('微信关联暂未配置', 'error');
+        };
+        wrap.appendChild(bindBtn);
+      }
+
       // 解除关联按钮（次要操作）
       const unlinkBtn = document.createElement('button');
       unlinkBtn.className = 'btn sync-unlink';
-      unlinkBtn.textContent = cloudCode ? '解 除 微 信 关 联' : '清 除 已 恢 复 编 号';
+      unlinkBtn.textContent = hasWx ? '解 除 当 前 账 号 关 联' : '解 除 当 前 账 号 关 联';
       attachClickSfx(unlinkBtn);
       unlinkBtn.onclick = async () => {
-        const confirmMsg = cloudCode
-          ? '解除微信关联后，本机将不再自动同步到云端（云端数据保留）。是否继续？'
-          : '清除当前编号？本机进度仍保留，但同步面板会回到初始状态。';
+        const confirmMsg = hasWx
+          ? '解除关联后，本机将不再自动同步到云端（云端数据保留 1 年）。下次微信授权或输入编号可以再次找回。是否继续？'
+          : '解除关联后，本机将不再自动同步到云端（云端数据保留 1 年）。下次输入编号可以再次找回。是否继续？';
         if (!confirm(confirmMsg)) return;
-        if (cloudCode) {
-          // 调后端清空 cookie
-          try {
-            await fetch('/api/wx/clear-cookie', { credentials: 'include' });
-          } catch {
-            /* ignore */
-          }
+        try {
+          await fetch('/api/wx/clear-cookie', { credentials: 'include' });
+        } catch {
+          /* ignore */
         }
         storage.unlinkCode();
       };
       wrap.appendChild(unlinkBtn);
-    } else if (inWx) {
-      // === 状态 3：在微信内但未关联 ===
+    } else if (linkedCode) {
+      // === 状态 2：只读恢复模式（用户输了别人的编号但没自己的账号）===
+      const codeRow = document.createElement('div');
+      codeRow.className = 'sync-code-row';
+      codeRow.innerHTML = `
+        <div class="sync-code-label">已恢复编号（只读）</div>
+        <div class="sync-code-value">${linkedCode}</div>
+      `;
+      wrap.appendChild(codeRow);
+
       const tip = document.createElement('div');
       tip.className = 'sync-tip';
-      tip.textContent = '点击下方按钮关联微信，自动云端备份进度';
+      tip.textContent = '本机进度不会上传到此编号；通关 1 关后会自动生成你自己的编号';
       wrap.appendChild(tip);
 
-      const bindBtn = document.createElement('button');
-      bindBtn.className = 'btn primary';
-      bindBtn.textContent = '关 联 微 信 同 步';
-      bindBtn.style.width = '100%';
-      attachClickSfx(bindBtn);
-      bindBtn.onclick = async () => {
-        const url = await fetchAuthUrl();
-        if (url) location.replace(url);
-        else showToast('云同步暂未配置，请稍后重试', 'error');
+      const inputBtn = document.createElement('button');
+      inputBtn.className = 'btn primary';
+      inputBtn.textContent = '输 入 其 他 编 号';
+      inputBtn.style.width = '100%';
+      attachClickSfx(inputBtn);
+      inputBtn.onclick = () => promptCodeAndPull(render);
+      wrap.appendChild(inputBtn);
+
+      const clearBtn = document.createElement('button');
+      clearBtn.className = 'btn sync-unlink';
+      clearBtn.textContent = '清 除 已 恢 复 编 号';
+      attachClickSfx(clearBtn);
+      clearBtn.onclick = () => {
+        if (!confirm('清除当前编号？本机进度仍保留。')) return;
+        storage.unlinkCode();
       };
-      wrap.appendChild(bindBtn);
+      wrap.appendChild(clearBtn);
     } else {
-      // === 状态 4：普通浏览器，可输入编号恢复 ===
+      // === 状态 3：还没账号 ===
       const tip = document.createElement('div');
       tip.className = 'sync-tip';
-      tip.textContent = '输入在微信中获得的 8 位编号，恢复云端进度';
+      tip.textContent = '通关第 1 关后会自动生成你的同步编号；或输入已有编号恢复进度';
       wrap.appendChild(tip);
 
       const recoverBtn = document.createElement('button');
@@ -834,11 +862,6 @@ function buildSyncPanel(): HTMLElement {
       attachClickSfx(recoverBtn);
       recoverBtn.onclick = () => promptCodeAndPull(render);
       wrap.appendChild(recoverBtn);
-
-      const hint = document.createElement('div');
-      hint.className = 'sync-hint';
-      hint.textContent = '没有编号？在微信内打开本页面后会自动生成';
-      wrap.appendChild(hint);
     }
   };
 

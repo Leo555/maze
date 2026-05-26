@@ -3,23 +3,19 @@
  *
  * 职责：
  *   - 启动时调用 /api/me 拉取云端进度（如果 cookie 有效）
- *   - 用户输入编号后调用 /api/sync 拉取
- *   - 通关后调用 /api/save 上行（防抖 1.5s，避免短时间多次写）
- *   - 微信内首次打开时触发授权跳转
+ *   - 必要时（首次通关）触发 /api/account/init 创建匿名账号
+ *   - 用户输入编号或扫码后调用 /api/sync 拉取
+ *   - 通关后调用 /api/save 上行（防抖 1.5s）
+ *   - 微信内可触发 /api/wx/auth-url 拿授权链接
  *
  * 设计原则：
  *   - 所有云调用 fire-and-forget：失败不影响游戏体验
- *   - 上行用最新进度（pick richer 在服务端再做一次仲裁）
- *   - 与 Storage 解耦：CloudSync 只暴露 fetchMine / pullByCode / push
+ *   - 上行用最新进度（pickRicher 在服务端再做一次仲裁）
+ *   - 与 Storage 解耦：CloudSync 只暴露 fetchMine / pullByCode / push / init
  *     合并逻辑由 Storage 调用方决定
  */
 
-import type { SaveData } from './Storage';
-
-interface MeResponse {
-  code: string;
-  progress: SaveData;
-}
+import type { SaveData, MeResponse } from '../../shared/types';
 
 interface SyncResponse {
   progress: SaveData;
@@ -35,13 +31,35 @@ interface AuthUrlResponse {
 }
 
 /**
- * 拉取自己的云端进度（基于 HttpOnly cookie）。
- * 401/404 都表示「我不是已登录用户」，返回 null，不视为错误。
+ * 拉取自己的账号信息（基于 HttpOnly cookie）。
+ * 401 表示「我没有 token cookie」，返回 null，不视为错误。
  */
 export async function fetchMine(): Promise<MeResponse | null> {
   try {
     const res = await fetch('/api/me', {
       credentials: 'include',
+      cache: 'no-store',
+    });
+    if (res.status === 200) return (await res.json()) as MeResponse;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 创建匿名账号：服务端生成 token cookie + 8 位 code，并把当前本地进度作为初始值。
+ * 用于浏览器/微信首次需要写云端时（一般是第一次通关时调用）。
+ */
+export async function initAccount(
+  initialProgress: SaveData
+): Promise<MeResponse | null> {
+  try {
+    const res = await fetch('/api/account/init', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ progress: initialProgress }),
       cache: 'no-store',
     });
     if (res.status === 200) return (await res.json()) as MeResponse;
@@ -87,7 +105,9 @@ export function pushDebounced(progress: SaveData): void {
 }
 
 /** 立即上行（不防抖）；返回服务端最终的进度（可能更进度） */
-export async function pushImmediate(progress: SaveData): Promise<SaveData | null> {
+export async function pushImmediate(
+  progress: SaveData
+): Promise<SaveData | null> {
   try {
     const res = await fetch('/api/save', {
       method: 'POST',
@@ -119,3 +139,13 @@ export async function fetchAuthUrl(): Promise<string | null> {
     return null;
   }
 }
+
+/** 聚合命名空间，方便 Storage 用 cloud.fetchMine() 形式调用 */
+export const cloud = {
+  fetchMine,
+  initAccount,
+  pullByCode,
+  pushDebounced,
+  pushImmediate,
+  fetchAuthUrl,
+};

@@ -4,7 +4,7 @@
  *   GET /api/wx/clear-cookie
  *
  * 流程：
- *   1. 删除 maze_uid cookie
+ *   1. 删除 maze_auth + 历史 maze_uid cookie
  *   2. 302 重定向回首页
  *
  * 用户再次访问首页时（且仍在微信内），main.ts 会因为没有 cookie 自动触发新的授权流程。
@@ -12,7 +12,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { clearUidCookie, json } from '../_lib/http.js';
+import { clearAuthCookie, json } from '../_lib/http.js';
 
 export default async function handler(
   req: VercelRequest,
@@ -22,7 +22,7 @@ export default async function handler(
     json(res, 405, { error: 'method_not_allowed' });
     return;
   }
-  clearUidCookie(res);
+  clearAuthCookie(res);
   // 用 setHeader 而非 writeHead，避免覆盖 Set-Cookie 头（callback.ts 同样的坑）
   res.setHeader('Location', '/');
   res.status(302).end();

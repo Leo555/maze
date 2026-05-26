@@ -153,6 +153,8 @@ export class Storage {
    * 持久化到 localStorage，关闭浏览器再打开仍可见。
    */
   private linkedCode = '';
+  /** 当前账号是否已绑定微信（仅做 UI 提示用） */
+  private hasWx = false;
   /** 监听器：进度变更时调用（用于 UI 自动刷新） */
   private listeners = new Set<() => void>();
 
@@ -187,6 +189,7 @@ export class Storage {
     const me = await cloud.fetchMine();
     if (!me) return;
     this.cloudCode = me.code;
+    this.hasWx = me.hasWx;
     // 同步到 linkedCode（保证 UI 在微信端也能稳定显示）
     if (this.linkedCode !== me.code) {
       this.linkedCode = me.code;
@@ -209,6 +212,34 @@ export class Storage {
       }
     }
     this.notifyChange();
+  }
+
+  /**
+   * 首次通关时调用：如果尚未有 cloudCode，则向后端调 init 创建匿名账号。
+   * 仅在浏览器/微信内通关时被触发，避免没玩过游戏的过路用户也建账号污染 KV。
+   *
+   * 用 inflight Promise 防止 reentry：同一时间只发一次 init 请求。
+   */
+  private initInflight: Promise<void> | null = null;
+  private async ensureCloudAccount(): Promise<void> {
+    if (this.cloudCode || this.initInflight) return;
+    this.initInflight = (async () => {
+      try {
+        const me = await cloud.initAccount(this.data);
+        if (me) {
+          this.cloudCode = me.code;
+          this.hasWx = me.hasWx;
+          if (this.linkedCode !== me.code) {
+            this.linkedCode = me.code;
+            this.saveLinkedCode(me.code);
+          }
+          this.notifyChange();
+        }
+      } finally {
+        this.initInflight = null;
+      }
+    })();
+    await this.initInflight;
   }
 
   /**
@@ -253,7 +284,7 @@ export class Storage {
     writeCookie(COOKIE_KEY, compactForCookie(this.data));
   }
 
-  /** 本地写完 + 云端防抖上行（如果已关联微信） */
+  /** 本地写完 + 云端防抖上行（如果已关联微信/已注册账号） */
   private flush(): void {
     this.flushLocal();
     if (this.cloudCode) cloud.pushDebounced(this.data);
@@ -290,6 +321,10 @@ export class Storage {
     }
     this.flush();
     this.notifyChange();
+    // 首次通关后异步建账号（不阻塞通关结算 UI）。
+    // 已有 cloudCode 时此调用是 no-op；首次会触发 init，
+    // init 完成后 cloudCode 写入 → 后续 flush 自然会带云端上行。
+    void this.ensureCloudAccount();
     return updated;
   }
 
@@ -319,6 +354,11 @@ export class Storage {
     return this.linkedCode;
   }
 
+  /** 是否已绑定微信（用于设置页 UI 文案差异化） */
+  getHasWx(): boolean {
+    return this.hasWx;
+  }
+
   /**
    * 用一份外部存档（如 pullByCode 拿到的）合并进本地，取更进度。
    * @param code 可选；若提供则同时持久化到 linkedCode（PC 端输入恢复后调用）
@@ -344,6 +384,7 @@ export class Storage {
   unlinkCode(): void {
     this.cloudCode = '';
     this.linkedCode = '';
+    this.hasWx = false;
     this.saveLinkedCode('');
     this.notifyChange();
   }

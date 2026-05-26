@@ -10,7 +10,7 @@ import './styles.css';
 import { Game } from './core/Game';
 import { isInWeChat, isStandalone } from './core/Environment';
 import { maybeShowAddToHomeScreen } from './ui/AddToHomeScreen';
-import { fetchAuthUrl, pullByCode } from './core/CloudSync';
+import { pullByCode } from './core/CloudSync';
 import { storage } from './core/Storage';
 import { showToast } from './ui/Toast';
 
@@ -84,40 +84,17 @@ new Game();
 // 加到主屏后 localStorage 不再受 ITP 7 天清理影响，进度持久化大幅提升
 maybeShowAddToHomeScreen();
 
-// === 微信内首次访问 → 触发授权 ===
-// 在微信内第一次打开页面时，自动跳转到微信授权页（snsapi_base 静默授权），
-// 授权完回到 /api/wx/callback → 后台分配 8 位编号 → 重定向回首页 ?code=xxx
+// === 微信内首次访问 → 触发授权（已废弃 v2 不再自动跳）===
 //
-// 跳过条件（任一满足即不再触发）：
-//   - 不在微信内（普通浏览器）
-//   - 已存在身份 cookie（document.cookie 中含 maze_uid，意味着此设备已绑定）
-//   - URL 已带 wx=ok / wx=fail 参数（说明刚回调过，避免循环）
-//   - localStorage 里有 wx_skip 标记（用户主动选择"暂不授权"）
+// v1 设计：在微信内强制授权拿 openid 才能创建账号。
+// v2 重构后：任何端首次通关都会自动 init 创建匿名账号，
+//             微信授权变成「可选的跨设备找回」入口（设置页手动点）。
+// 因此这里不再自动 redirect，让微信内体验与普通浏览器一致。
+//
+// 保留 ?wx=ok / ?wx=fail 回调处理，因为「设置页手动点关联微信」仍走同一回调。
+
 const params = new URLSearchParams(location.search);
 const justReturned = params.get('wx') === 'ok' || params.get('wx') === 'fail';
-const hasUidCookie = document.cookie.includes('maze_uid=');
-const skipWxAuth = (() => {
-  try {
-    return localStorage.getItem('wx_skip_auth') === '1';
-  } catch {
-    return false;
-  }
-})();
-
-if (
-  isInWeChat() &&
-  !hasUidCookie &&
-  !justReturned &&
-  !skipWxAuth
-) {
-  // 异步获取授权 URL 后再跳转，避免阻塞渲染
-  void fetchAuthUrl().then((url) => {
-    if (url) {
-      // 用 location.replace 不留下历史栈记录
-      location.replace(url);
-    }
-  });
-}
 
 // 处理回调返回的 ?wx=ok&code=xxx：提示用户编号，并清理 URL
 if (justReturned) {

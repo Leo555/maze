@@ -1,19 +1,28 @@
 /**
  * KV 数据访问层（仅后端使用）
  *
- * Key 设计：
- *   user:{openid}      → CloudUser（主存储）
- *   code:{8位}         → CloudCodeIndex（编号 → openid 反向索引）
+ * v2 Key 设计：
+ *   user:{userId}      → CloudUser（主存储；userId 是 UUID）
+ *   code:{8位}         → CloudCodeIndex（编号 → userId）
+ *   openid:{openid}    → CloudOpenidIndex（微信 openid → userId，仅微信用户）
  *   meta:codeCounter   → 自增编号计数器
  *
- * 编号生成策略：
- *   - 起始 10000000，保证恒为 8 位
- *   - 用 INCR 取下一个值（原子操作，无碰撞）
- *   - 用一个简单的乱序映射，避免用户看出"我是第几个注册的"
+ * v1 历史兼容（用 openid 当主键的旧记录）：
+ *   readLegacyByOpenid()：可读到老的 user:{openid} 记录
+ *   迁移逻辑：当微信 callback 检测到老记录时，迁移到新 schema
+ *
+ * 编号生成策略不变：
+ *   - 起始 10000000，恒为 8 位
+ *   - INCR + 乱序映射避免暴露注册顺序
  */
 
 import { kv } from '@vercel/kv';
-import type { CloudUser, CloudCodeIndex, SaveData } from '../../shared/types.js';
+import type {
+  CloudUser,
+  CloudCodeIndex,
+  CloudOpenidIndex,
+  SaveData,
+} from '../../shared/types.js';
 
 const COUNTER_KEY = 'meta:codeCounter';
 const COUNTER_START = 10000000;
@@ -27,107 +36,237 @@ const CODE_MOD = 90000000;
 /**
  * 用户数据的 TTL：1 年（秒数）。
  * 每次 read / write 时都会续期到 1 年后，相当于"最后活跃时间起 1 年"。
- * 长期不活跃的账号自动从 KV 中清掉，避免免费额度满。
- *
- * 关键设计：code: 反向索引也用同样 TTL 续期，
- * 否则会出现 user 还在但 code 失效（用户编号"消失了"）的诡异状态。
  */
 const USER_TTL_SECONDS = 365 * 24 * 60 * 60;
+
+/** 生成 UUID v4（Edge Runtime 自带 crypto.randomUUID） */
+function newUserId(): string {
+  return crypto.randomUUID();
+}
+
+/** 生成 256-bit base64url token（私密，写云端凭据） */
+function newToken(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  // base64url 编码：纯 ASCII，cookie / URL 都安全
+  let s = '';
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
 
 /**
  * 把单调递增的计数器 n 映射为 8 位编号字符串。
  * 输入：0, 1, 2, 3, ...
  * 输出：[10000000, 99999999] 内的看似随机的 8 位数
- *
- * 数学上：(n * SHUFFLE_MUL + SHUFFLE_SALT) % 90000000 + 10000000
- * gcd(SHUFFLE_MUL, 90000000) === 1 保证映射可逆且不冲突。
  */
 function counterToCode(n: number): string {
-  const v = ((n * SHUFFLE_MUL + SHUFFLE_SALT) % CODE_MOD + COUNTER_START);
+  const v = ((n * SHUFFLE_MUL + SHUFFLE_SALT) % CODE_MOD) + COUNTER_START;
   return String(v);
 }
 
-/** 给指定 openid 分配一个新的 8 位编号（INCR + 乱序映射） */
+/** 给指定用户分配一个新的 8 位编号（INCR + 乱序映射） */
 async function allocateCode(): Promise<string> {
-  // INCR：原子自增，初始为 0（key 不存在时被认作 0）
   const n = await kv.incr(COUNTER_KEY);
-  return counterToCode(n - 1); // 第一个用户 n=1 → 用 0 算编号
+  return counterToCode(n - 1);
 }
 
-/** 查询 openid 对应的用户记录，没有则返回 null。读取时顺手续期 TTL */
-export async function getUser(openid: string): Promise<CloudUser | null> {
-  const user = await kv.get<CloudUser>(`user:${openid}`);
+// =========================== 读取 ===========================
+
+/** 通过 userId 查用户。命中时续期 user + code + openid 三条索引 */
+export async function getUserById(userId: string): Promise<CloudUser | null> {
+  const user = await kv.get<CloudUser>(`user:${userId}`);
   if (user) {
-    // 读续期：用 EXPIRE 而不是重写 value（原子、低成本）
-    // 不阻塞返回（fire-and-forget），即使续期失败也不影响主流程
-    void kv.expire(`user:${openid}`, USER_TTL_SECONDS);
+    void kv.expire(`user:${userId}`, USER_TTL_SECONDS);
     void kv.expire(`code:${user.code}`, USER_TTL_SECONDS);
+    if (user.openid) void kv.expire(`openid:${user.openid}`, USER_TTL_SECONDS);
   }
   return user ?? null;
 }
 
-/** 查询编号对应的 openid，没有则返回 null。命中时也续期 user 主记录 */
-export async function getOpenidByCode(code: string): Promise<string | null> {
+/** 通过编号查 userId。命中时续期 */
+export async function getUserIdByCode(code: string): Promise<string | null> {
   const idx = await kv.get<CloudCodeIndex>(`code:${code}`);
   if (idx) {
     void kv.expire(`code:${code}`, USER_TTL_SECONDS);
-    void kv.expire(`user:${idx.openid}`, USER_TTL_SECONDS);
+    void kv.expire(`user:${idx.userId}`, USER_TTL_SECONDS);
   }
-  return idx?.openid ?? null;
+  return idx?.userId ?? null;
+}
+
+/** 通过 openid 查 userId。命中时续期 */
+export async function getUserIdByOpenid(openid: string): Promise<string | null> {
+  const idx = await kv.get<CloudOpenidIndex>(`openid:${openid}`);
+  if (idx) {
+    void kv.expire(`openid:${openid}`, USER_TTL_SECONDS);
+    void kv.expire(`user:${idx.userId}`, USER_TTL_SECONDS);
+  }
+  return idx?.userId ?? null;
+}
+
+/** 通过 token 校验后查用户。token 不匹配返回 null（防止 token 被篡改后访问别人账号） */
+export async function getUserByToken(
+  userId: string,
+  token: string
+): Promise<CloudUser | null> {
+  const user = await getUserById(userId);
+  if (!user) return null;
+  if (user.token !== token) return null;
+  return user;
 }
 
 /**
- * 创建新用户：分配编号、写入两条 KV，并设置 1 年 TTL。
- * 仅在 openid 没有对应记录时调用。
+ * v1 历史兼容：旧 KV 存了 user:{openid}（openid 当 key），
+ * 此函数能读到那批数据，便于迁移。
  */
-export async function createUser(
-  openid: string,
+export async function readLegacyUserByOpenid(
+  openid: string
+): Promise<{ openid: string; code: string; progress: SaveData } | null> {
+  // 注意：旧 schema 的 value 形如 { openid, code, progress, createdAt, updatedAt }
+  // 不含 userId / token —— 用宽松类型读出
+  const legacy = await kv.get<{ openid?: string; code?: string; progress?: SaveData }>(
+    `user:${openid}`
+  );
+  if (!legacy || !legacy.code || !legacy.progress) return null;
+  // 注意：可能命中新 schema 的 user:{userId}（如果 openid 字符串恰好被某 UUID 用作 key），
+  // 但 openid 字符串与 UUID 长度差异大，碰撞极不可能；保守起见还是判一下
+  if (typeof legacy.openid !== 'string') return null;
+  return {
+    openid: legacy.openid,
+    code: legacy.code,
+    progress: legacy.progress,
+  };
+}
+
+// =========================== 写入 ===========================
+
+/**
+ * 创建匿名账号：生成 userId / token / code，写入 user + code 索引。
+ * 不绑定 openid（微信关联在另一个流程做）。
+ */
+export async function createAnonymousUser(
   initialProgress: SaveData
 ): Promise<CloudUser> {
+  const userId = newUserId();
+  const token = newToken();
   const code = await allocateCode();
   const now = Date.now();
   const user: CloudUser = {
-    openid,
+    userId,
     code,
+    token,
     progress: initialProgress,
     createdAt: now,
     updatedAt: now,
   };
-  // 写两条 KV（编号反向索引 + 用户主存储），均带 1 年 TTL
-  // 这两步不在事务里也没关系：编号是单调递增分配的，不会被复用
   await Promise.all([
-    kv.set(`user:${openid}`, user, { ex: USER_TTL_SECONDS }),
+    kv.set(`user:${userId}`, user, { ex: USER_TTL_SECONDS }),
     kv.set(
       `code:${code}`,
-      { openid, createdAt: now } as CloudCodeIndex,
+      { userId, createdAt: now } as CloudCodeIndex,
       { ex: USER_TTL_SECONDS }
     ),
   ]);
   return user;
 }
 
-/** 更新用户进度（不创建编号；用户必须已存在）。写入时一并续期 TTL */
+/** 更新进度（凭 userId；调用方应已通过 token 校验） */
 export async function updateUserProgress(
-  openid: string,
+  userId: string,
   progress: SaveData
 ): Promise<CloudUser | null> {
-  const user = await getUser(openid);
+  const user = await getUserById(userId);
   if (!user) return null;
   const next: CloudUser = { ...user, progress, updatedAt: Date.now() };
-  // 写主记录时重设 TTL；code 反向索引用 EXPIRE 续期（无需重写 value）
   await Promise.all([
-    kv.set(`user:${openid}`, next, { ex: USER_TTL_SECONDS }),
+    kv.set(`user:${userId}`, next, { ex: USER_TTL_SECONDS }),
     kv.expire(`code:${user.code}`, USER_TTL_SECONDS),
+    user.openid
+      ? kv.expire(`openid:${user.openid}`, USER_TTL_SECONDS)
+      : Promise.resolve(),
   ]);
   return next;
 }
 
-/** Get-or-create：保证返回一个有效的 CloudUser */
-export async function ensureUser(
-  openid: string,
-  fallback: SaveData
-): Promise<CloudUser> {
-  const existing = await getUser(openid);
-  if (existing) return existing;
-  return createUser(openid, fallback);
+/**
+ * 把 openid 绑定到指定 userId（写入 openid 索引 + user.openid 字段）。
+ * 不做合并；调用方应该先确认 openid 没绑过别人。
+ */
+export async function bindOpenid(
+  userId: string,
+  openid: string
+): Promise<CloudUser | null> {
+  const user = await getUserById(userId);
+  if (!user) return null;
+  if (user.openid === openid) return user;
+  const next: CloudUser = { ...user, openid, updatedAt: Date.now() };
+  await Promise.all([
+    kv.set(`user:${userId}`, next, { ex: USER_TTL_SECONDS }),
+    kv.set(
+      `openid:${openid}`,
+      { userId, createdAt: Date.now() } as CloudOpenidIndex,
+      { ex: USER_TTL_SECONDS }
+    ),
+  ]);
+  return next;
+}
+
+/**
+ * 替换用户进度（覆盖式，调用方负责传入 pickRicher 后的结果）
+ */
+export async function replaceProgress(
+  userId: string,
+  progress: SaveData
+): Promise<CloudUser | null> {
+  return updateUserProgress(userId, progress);
+}
+
+/**
+ * v1 → v2 迁移辅助：
+ *   - 把 user 记录的 code 字段改成 targetCode（老编号）
+ *   - 让 code:{targetCode} 索引指向当前 userId
+ *   - 把 openid 索引也指向当前 userId
+ *   - 让 user.openid 字段就位
+ *   - 顺手清掉 newUser 创建时自动分配的临时 code 索引（如果不等于 targetCode）
+ */
+export async function rebindCodeToUser(params: {
+  userId: string;
+  oldAutoCode: string;
+  targetCode: string;
+  openid: string;
+}): Promise<void> {
+  const { userId, oldAutoCode, targetCode, openid } = params;
+  const user = await getUserById(userId);
+  if (!user) return;
+
+  const next: CloudUser = {
+    ...user,
+    code: targetCode,
+    openid,
+    updatedAt: Date.now(),
+  };
+  const ops: Array<Promise<unknown>> = [
+    kv.set(`user:${userId}`, next, { ex: USER_TTL_SECONDS }),
+    kv.set(
+      `code:${targetCode}`,
+      { userId, createdAt: Date.now() } as CloudCodeIndex,
+      { ex: USER_TTL_SECONDS }
+    ),
+    kv.set(
+      `openid:${openid}`,
+      { userId, createdAt: Date.now() } as CloudOpenidIndex,
+      { ex: USER_TTL_SECONDS }
+    ),
+  ];
+  if (oldAutoCode && oldAutoCode !== targetCode) {
+    // 临时 code 索引可以删掉，避免占用编号空间
+    ops.push(kv.del(`code:${oldAutoCode}`));
+  }
+  await Promise.all(ops);
+}
+
+/**
+ * v1 → v2 迁移辅助：删除老 user:{openid} 记录（迁移完成后避免重复触发迁移）
+ */
+export async function deleteLegacyOpenidRecord(openid: string): Promise<void> {
+  await kv.del(`user:${openid}`);
 }
