@@ -749,6 +749,13 @@ body {
   padding: 8px 10px;
   min-width: 0;
 }
+/* 二维码按钮 - 主要操作，独占一行 */
+.settings-sync .sync-qr {
+  width: 100%;
+  font-size: 12px;
+  padding: 9px 10px;
+  margin-top: 6px;
+}
 /* 解除关联 - 次要操作，独占一行、低饱和 */
 .settings-sync .sync-unlink {
   width: 100%;
@@ -763,6 +770,45 @@ body {
 .settings-sync .sync-unlink:active {
   color: var(--text);
   border-color: var(--border-strong);
+}
+
+/* ========== 同步二维码弹窗 ========== */
+.scene-card-qr {
+  align-items: center;
+}
+.scene-card-qr .qr-wrap {
+  margin: 18px auto 6px;
+  padding: 10px;
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 14px rgba(74, 60, 42, 0.08);
+  display: inline-block;
+  line-height: 0; /* 消除 svg 底部 inline 对齐空隙 */
+}
+.scene-card-qr .qr-wrap svg {
+  display: block;
+}
+.scene-card-qr .qr-tip {
+  font-size: 12px;
+  color: var(--text-soft);
+  text-align: center;
+  line-height: 1.55;
+  margin-top: 12px;
+  padding: 0 8px;
+}
+.scene-card-qr .qr-code-tag {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+}
+.scene-card-qr .qr-code-tag strong {
+  color: var(--accent-strong);
+  font-size: 16px;
+  letter-spacing: 3px;
+  font-variant-numeric: tabular-nums;
+  margin-left: 4px;
 }
 
 /* ========== 最佳路径观察模式 浮窗 ========== */

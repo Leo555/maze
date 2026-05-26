@@ -10,7 +10,8 @@ import './styles.css';
 import { Game } from './core/Game';
 import { isInWeChat, isStandalone } from './core/Environment';
 import { maybeShowAddToHomeScreen } from './ui/AddToHomeScreen';
-import { fetchAuthUrl } from './core/CloudSync';
+import { fetchAuthUrl, pullByCode } from './core/CloudSync';
+import { storage } from './core/Storage';
 import { showToast } from './ui/Toast';
 
 // === 全局环境标记（CSS 可针对 body[data-env] 做差异化样式）===
@@ -138,6 +139,33 @@ if (justReturned) {
   }
   // 清理 URL，避免分享时泄露 code
   history.replaceState(null, '', location.pathname + location.hash);
+}
+
+// === 处理 ?recover=xxxxxxxx：扫码 / 链接恢复进度 ===
+// 用户在另一台设备扫了同步面板的二维码，URL 形如：
+//   https://maze.lz5z.com/?recover=14815162
+// 自动调 /api/sync 拉取 → 合并到本地 → 持久化编号 → 提示恢复成功
+const recoverCode = params.get('recover');
+if (recoverCode && /^\d{8}$/.test(recoverCode)) {
+  // 立刻清掉 URL 参数，避免用户截图分享时把编号泄露
+  // （编号本身只能读不能写，泄露危险性低，但仍是用户隐私）
+  const cleanUrl = location.pathname + location.hash;
+  history.replaceState(null, '', cleanUrl);
+
+  // 异步执行：不阻塞游戏启动，结果由 toast 反馈
+  void (async () => {
+    const remote = await pullByCode(recoverCode);
+    if (!remote) {
+      showToast('该编号不存在或已过期', 'error', 2400);
+      return;
+    }
+    const changed = storage.mergeRemote(remote, recoverCode);
+    showToast(
+      changed ? '进度已自动恢复！' : '已是最新进度，无需更新',
+      changed ? 'success' : 'info',
+      2400
+    );
+  })();
 }
 
 // === Vercel Web Analytics（延迟注入，避免阻塞首屏渲染）===

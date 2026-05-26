@@ -773,6 +773,14 @@ function buildSyncPanel(): HTMLElement {
 
       wrap.appendChild(btnRow);
 
+      // 第二行：二维码按钮（独占一行，作为辅助同步路径）
+      const qrBtn = document.createElement('button');
+      qrBtn.className = 'btn sync-qr';
+      qrBtn.textContent = '生 成 同 步 二 维 码';
+      attachClickSfx(qrBtn);
+      qrBtn.onclick = () => showQrDialog(linkedCode);
+      wrap.appendChild(qrBtn);
+
       // 解除关联按钮（次要操作）
       const unlinkBtn = document.createElement('button');
       unlinkBtn.className = 'btn sync-unlink';
@@ -875,6 +883,54 @@ async function promptCodeAndPull(refresh: () => void): Promise<void> {
     showToast('已是最新进度，无需更新', 'info');
   }
   refresh();
+}
+
+/**
+ * 弹出二维码对话框：手机扫码即可在另一设备自动恢复进度。
+ *
+ * 二维码内容设计：`https://maze.lz5z.com/?recover={code}`
+ *   - 单一 URL，扫码后浏览器直接打开
+ *   - main.ts 启动时检测 ?recover= 参数 → 自动调 sync 拉取并合并
+ *   - 8 位数字 URL 短，QR 模块少，扫码识别成功率最高
+ *
+ * 离线生成：用 qrcode-generator 库本地算出 SVG，无任何网络请求。
+ */
+function showQrDialog(code: string): void {
+  // 复用 overlay 系统：往 overlay 里塞一个 scene，关闭走 hideOverlay
+  const url = `${location.origin}/?recover=${encodeURIComponent(code)}`;
+  // 异步加载 Qr 模块：仅当用户真的点了二维码按钮才加载，
+  // 不让 qrcode-generator 进入主 bundle 的关键路径
+  void import('./Qr').then(({ generateQrSvg }) => {
+    const svg = generateQrSvg(url, 240);
+
+    const scene = document.createElement('div');
+    scene.className = 'scene scene-qr';
+
+    const card = document.createElement('div');
+    card.className = 'scene-card scene-card-qr';
+    card.innerHTML = `
+      <div class="scene-title">同 步 二 维 码</div>
+      <div class="scene-subtitle">SYNC QR CODE</div>
+      <div class="qr-wrap">${svg}</div>
+      <div class="qr-tip">
+        在另一台设备的浏览器（含微信内）扫描此二维码，<br>
+        即可自动恢复进度
+      </div>
+      <div class="qr-code-tag">编号：<strong>${code}</strong></div>
+    `;
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'btn primary';
+    closeBtn.textContent = '关 闭';
+    closeBtn.style.width = '100%';
+    closeBtn.style.marginTop = '14px';
+    attachClickSfx(closeBtn);
+    closeBtn.onclick = () => hideOverlay();
+    card.appendChild(closeBtn);
+
+    scene.appendChild(card);
+    showOverlay(scene);
+  });
 }
 
 export function hideOverlay(): void {
