@@ -1,119 +1,62 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "//": [
-    "Vercel 部署配置：HTTP 缓存策略 + 基础安全头。",
-    "缓存设计原则：",
-    "  - 带 hash 的产物（/assets/*）无脑长缓存 1 年 immutable",
-    "  - 入口 HTML 永不缓存，保证部署立即生效",
-    "  - 静态资源 (icon / og 图 / robots / sitemap) 适度缓存，",
-    "    用 stale-while-revalidate 让爬虫与社交平台刷得到新版本",
-    "  - 编辑此文件后 push，Vercel 自动重新部署生效"
-  ],
   "headers": [
     {
-      "//": "Vite 输出的带 hash 资源（/assets/...）— 内容变即改名，安全长缓存",
       "source": "/assets/(.*)",
       "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=31536000, immutable"
-        }
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     },
     {
-      "//": "入口 HTML 必须不缓存，否则部署后用户仍引用旧 hash 资源（404）",
       "source": "/",
       "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=0, must-revalidate"
-        }
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
       ]
     },
     {
-      "//": "显式 index.html 路径同样不缓存",
       "source": "/index.html",
       "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=0, must-revalidate"
-        }
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
       ]
     },
     {
-      "//": "favicon / OG 分享图 — 偶尔更新，1 天强缓存 + 7 天 stale-while-revalidate",
       "source": "/(favicon\\.svg|og-cover\\.png|og-cover\\.svg)",
       "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=86400, stale-while-revalidate=604800"
-        }
+        { "key": "Cache-Control", "value": "public, max-age=86400, stale-while-revalidate=604800" }
       ]
     },
     {
-      "//": "PWA 图标 — 1 天强缓存 + 30 天 stale-while-revalidate（更新频率低）",
       "source": "/icons/(.*)",
       "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=86400, stale-while-revalidate=2592000"
-        }
+        { "key": "Cache-Control", "value": "public, max-age=86400, stale-while-revalidate=2592000" }
       ]
     },
     {
-      "//": "PWA Manifest — 1 小时缓存，让浏览器及时感知应用名/图标更新",
       "source": "/manifest.webmanifest",
       "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=3600, stale-while-revalidate=86400"
-        },
-        {
-          "key": "Content-Type",
-          "value": "application/manifest+json; charset=utf-8"
-        }
+        { "key": "Cache-Control", "value": "public, max-age=3600, stale-while-revalidate=86400" },
+        { "key": "Content-Type", "value": "application/manifest+json; charset=utf-8" }
       ]
     },
     {
-      "//": "搜索引擎爬虫文件 — 1 小时缓存，更新可被尽快感知",
       "source": "/(robots\\.txt|sitemap\\.xml)",
       "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=3600"
-        }
+        { "key": "Cache-Control", "value": "public, max-age=3600" }
       ]
     },
     {
-      "//": "音频资源（启用音频时才会请求）— 内容稳定可长缓存 30 天",
       "source": "/audio/(.*)",
       "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=2592000, stale-while-revalidate=86400"
-        }
+        { "key": "Cache-Control", "value": "public, max-age=2592000, stale-while-revalidate=86400" }
       ]
     },
     {
-      "//": "全站默认安全头（不与上方 Cache-Control 冲突，会被合并）",
       "source": "/(.*)",
       "headers": [
-        {
-          "key": "X-Content-Type-Options",
-          "value": "nosniff"
-        },
-        {
-          "key": "Referrer-Policy",
-          "value": "strict-origin-when-cross-origin"
-        },
-        {
-          "key": "X-Frame-Options",
-          "value": "SAMEORIGIN"
-        },
-        {
-          "key": "Permissions-Policy",
-          "value": "interest-cohort=(), browsing-topics=()"
-        }
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+        { "key": "Permissions-Policy", "value": "interest-cohort=(), browsing-topics=()" }
       ]
     }
   ],
