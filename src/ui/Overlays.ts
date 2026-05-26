@@ -896,15 +896,14 @@ async function promptCodeAndPull(refresh: () => void): Promise<void> {
  * 离线生成：用 qrcode-generator 库本地算出 SVG，无任何网络请求。
  */
 function showQrDialog(code: string): void {
-  // 复用 overlay 系统：往 overlay 里塞一个 scene，关闭走 hideOverlay
+  // 用独立 modal 层叠在设置页之上，关闭只移除自身，不影响背后的设置页。
+  // 不调 showOverlay（那个会 clearOverlay 把设置页清空，关闭时就只剩白屏）。
   const url = `${location.origin}/?recover=${encodeURIComponent(code)}`;
-  // 异步加载 Qr 模块：仅当用户真的点了二维码按钮才加载，
-  // 不让 qrcode-generator 进入主 bundle 的关键路径
   void import('./Qr').then(({ generateQrSvg }) => {
     const svg = generateQrSvg(url, 240);
 
-    const scene = document.createElement('div');
-    scene.className = 'scene scene-qr';
+    const modal = document.createElement('div');
+    modal.className = 'qr-modal';
 
     const card = document.createElement('div');
     card.className = 'scene-card scene-card-qr';
@@ -925,11 +924,26 @@ function showQrDialog(code: string): void {
     closeBtn.style.width = '100%';
     closeBtn.style.marginTop = '14px';
     attachClickSfx(closeBtn);
-    closeBtn.onclick = () => hideOverlay();
+
+    // 自定义关闭：移除 modal 自身，触发音效
+    const closeModal = (): void => {
+      audio.playSfx('ui_close');
+      modal.classList.remove('show');
+      // 等过渡动画结束后移除节点
+      setTimeout(() => modal.remove(), 280);
+    };
+    closeBtn.onclick = closeModal;
     card.appendChild(closeBtn);
 
-    scene.appendChild(card);
-    showOverlay(scene);
+    // 点击 modal 蒙层（不是卡片）也关闭
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeModal();
+    });
+
+    modal.appendChild(card);
+    overlay.appendChild(modal);
+    // 触发入场动画（next frame 才能让浏览器先 paint 初始状态）
+    requestAnimationFrame(() => modal.classList.add('show'));
   });
 }
 

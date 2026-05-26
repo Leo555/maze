@@ -772,7 +772,38 @@ body {
   border-color: var(--border-strong);
 }
 
-/* ========== 同步二维码弹窗 ========== */
+/* ========== 同步二维码弹窗（modal 层，叠在设置页之上） ========== */
+/*
+ * 与普通 .scene 不同：
+ *   - 不替换 overlay 内容，而是 append 到 overlay 上
+ *   - 拥有自己的蒙层 + 进出场动画
+ *   - 关闭只移除自己，背后的设置页保留
+ */
+.qr-modal {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(28, 22, 14, 0.5);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  z-index: 50;
+  padding: 24px;
+  opacity: 0;
+  transition: opacity 0.28s ease;
+}
+.qr-modal.show {
+  opacity: 1;
+}
+.qr-modal .scene-card {
+  transform: scale(0.92);
+  transition: transform 0.32s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+.qr-modal.show .scene-card {
+  transform: scale(1);
+}
+
 .scene-card-qr {
   align-items: center;
 }
