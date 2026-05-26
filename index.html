@@ -41,9 +41,29 @@
 
     <!-- 移动端 Web App 体验 -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="晨雾迷径" />
     <meta name="format-detection" content="telephone=no" />
+    <!-- 让 Android Chrome 也按"独立应用"模式打开 -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="application-name" content="晨雾迷径" />
+
+    <!--
+      PWA Manifest：让现代浏览器（Chrome/Edge/iOS Safari 16.4+/Android）
+      把页面识别为可安装应用。用户加到主屏后：
+        - 全屏运行，无浏览器工具栏
+        - iOS/iPadOS 上 localStorage 不再受 ITP 7 天清理（重要！）
+    -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <!-- iOS 主屏图标（不能透明，必须实色背景） -->
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <!--
+      微信内嵌浏览器默认会从页面截图作为分享缩略图，体验差。
+      虽然没接 JSSDK 不能完全自定义分享，但下面的 thumb 图至少能让
+      默认抓取走 favicon 或 og:image 路径，提升基础体验
+    -->
+    <meta itemprop="image" content="https://maze.lz5z.com/og-cover.png" />
 
     <!-- 图标 -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />

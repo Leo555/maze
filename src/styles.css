@@ -37,22 +37,38 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  /* 防止 iOS Safari 双指缩放 / 双击放大 */
+  /*
+   * touch-action: none 阻止默认手势（双指缩放、下拉刷新、长按拖拽）
+   * 配合 main.ts 的 gesturestart 监听形成双重防护
+   */
   touch-action: none;
   -webkit-touch-callout: none;
+  /* 防止 iOS Safari 输入框聚焦时整页放大；本项目无输入框，但兜底安全 */
+  -webkit-text-size-adjust: 100%;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
     'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
   background: var(--bg);
   color: var(--text);
-  /* 解决移动端 100vh 与浏览器工具栏冲突 */
+  /*
+   * 高度兜底链：
+   *   1. 100% (默认)
+   *   2. 100vh
+   *   3. 100dvh (现代浏览器，自动减去工具栏)
+   *   4. var(--app-height) (main.ts 实测 innerHeight 写入，兼容微信 X5 旧版本)
+   * 浏览器从下往上识别，遇到不认识的会回退；--app-height 永远是最准的兜底
+   */
+  height: 100vh;
   height: 100dvh;
+  height: var(--app-height, 100dvh);
+  /* iOS 安全区（刘海屏 / 圆角），从主屏全屏启动时尤其重要 */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 #app {
   position: relative;
-  width: 100vw;
-  height: 100vh;
-  height: 100dvh;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
 }
 
@@ -775,6 +791,75 @@ body {
 /* 玩家轨迹：与 Renderer.drawPlayerPath 中 rgba(80,110,170,0.9) 一致 */
 .review-legend .legend-dot-player {
   background: rgba(80, 110, 170, 0.9);
+}
+
+/* ========== "添加到主屏" 引导横幅（仅 iOS Safari 普通模式下显示） ========== */
+.a2hs-banner {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(74, 60, 42, 0.22);
+  border: 1px solid var(--border);
+  z-index: 9999;
+  /* 入场动画：从底部滑入 */
+  transform: translateY(120%);
+  opacity: 0;
+  transition: transform 0.32s ease, opacity 0.32s ease;
+  pointer-events: auto;
+}
+.a2hs-banner.a2hs-show {
+  transform: translateY(0);
+  opacity: 1;
+}
+.a2hs-banner.a2hs-hide {
+  transform: translateY(120%);
+  opacity: 0;
+}
+.a2hs-banner .a2hs-text {
+  flex: 1;
+  min-width: 0;
+}
+.a2hs-banner .a2hs-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.a2hs-banner .a2hs-tip {
+  font-size: 12px;
+  color: var(--text-soft);
+  line-height: 1.4;
+}
+.a2hs-banner .a2hs-icon {
+  display: inline-block;
+  padding: 0 4px;
+  color: var(--accent);
+  font-weight: 700;
+}
+.a2hs-banner .a2hs-close {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  border-radius: 50%;
+}
+.a2hs-banner .a2hs-close:active {
+  background: rgba(0, 0, 0, 0.08);
 }
 
 /* Toast 提示 */
