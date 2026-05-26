@@ -1,0 +1,21 @@
+{
+  "//": "Vercel Functions（api/ 目录）的 TypeScript 配置。\nVercel 部署时会自动用 Node.js Runtime 编译这些文件，但本地 IDE / tsc 需要这份配置才能正确解析。",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "lib": ["ES2022"],
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"]
+  },
+  "include": ["./**/*.ts", "../shared/**/*.ts"]
+}

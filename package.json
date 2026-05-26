@@ -12,10 +12,13 @@
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",
+    "@vercel/kv": "^3.0.0",
     "howler": "^2.2.4"
   },
   "devDependencies": {
     "@types/howler": "^2.2.11",
+    "@types/node": "^25.9.1",
+    "@vercel/node": "^5.8.4",
     "sharp": "^0.34.5",
     "typescript": "^5.4.5",
     "vite": "^5.2.11"

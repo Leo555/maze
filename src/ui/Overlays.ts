@@ -7,6 +7,8 @@
 
 import { audio } from '../core/Audio';
 import { storage } from '../core/Storage';
+import { isInWeChat } from '../core/Environment';
+import { fetchAuthUrl, pullByCode, pushImmediate } from '../core/CloudSync';
 import {
   levels,
   CHAPTER_COUNT,
@@ -678,6 +680,9 @@ export function showSettings(onBack: () => void): void {
   resetRow.appendChild(resetBtn);
   card.appendChild(resetRow);
 
+  // === 同步进度面板（云端关联状态 + 编号显示 + 输入码恢复） ===
+  card.appendChild(buildSyncPanel());
+
   const back = document.createElement('button');
   back.className = 'btn primary';
   back.textContent = '返  回';
@@ -688,6 +693,156 @@ export function showSettings(onBack: () => void): void {
 
   scene.appendChild(card);
   showOverlay(scene);
+}
+
+// ==================== 同步进度面板（嵌入设置页） ====================
+/**
+ * 构造「同步进度」面板，加在设置页里。
+ *
+ * 三种状态：
+ *   1. 已关联微信（storage.getCloudCode() 非空）：
+ *      显示「我的同步编号：12345678」+ 复制按钮 +「输入编号恢复」按钮
+ *   2. 未关联，且当前在微信内：
+ *      显示「关联微信，自动云同步」按钮（点击 → 跳转授权）
+ *   3. 未关联，普通浏览器：
+ *      显示「输入编号恢复进度」+ 提示「在微信内打开本页面以创建编号」
+ */
+function buildSyncPanel(): HTMLElement {
+  const wrap = document.createElement('div');
+  wrap.className = 'settings-sync';
+
+  const render = (): void => {
+    wrap.innerHTML = '';
+    const code = storage.getCloudCode();
+    const inWx = isInWeChat();
+
+    // 标题行
+    const title = document.createElement('div');
+    title.className = 'sync-title';
+    title.textContent = '同步进度';
+    wrap.appendChild(title);
+
+    if (code) {
+      // === 状态 1：已关联 ===
+      const codeRow = document.createElement('div');
+      codeRow.className = 'sync-code-row';
+      codeRow.innerHTML = `
+        <div class="sync-code-label">我的同步编号</div>
+        <div class="sync-code-value">${code}</div>
+      `;
+      wrap.appendChild(codeRow);
+
+      const tip = document.createElement('div');
+      tip.className = 'sync-tip';
+      tip.textContent = '在其他设备的本页输入此编号即可恢复进度';
+      wrap.appendChild(tip);
+
+      const btnRow = document.createElement('div');
+      btnRow.className = 'sync-btn-row';
+
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'btn';
+      copyBtn.textContent = '复 制 编 号';
+      attachClickSfx(copyBtn);
+      copyBtn.onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(code);
+          copyBtn.textContent = '已 复 制 ✓';
+          setTimeout(() => (copyBtn.textContent = '复 制 编 号'), 1500);
+        } catch {
+          alert(`你的同步编号：${code}\n请手动复制`);
+        }
+      };
+      btnRow.appendChild(copyBtn);
+
+      const inputBtn = document.createElement('button');
+      inputBtn.className = 'btn';
+      inputBtn.textContent = '输入其他编号';
+      attachClickSfx(inputBtn);
+      inputBtn.onclick = () => promptCodeAndPull(render);
+      btnRow.appendChild(inputBtn);
+
+      wrap.appendChild(btnRow);
+    } else if (inWx) {
+      // === 状态 2：在微信内但未关联 ===
+      const tip = document.createElement('div');
+      tip.className = 'sync-tip';
+      tip.textContent = '点击下方按钮关联微信，自动云端备份进度';
+      wrap.appendChild(tip);
+
+      const bindBtn = document.createElement('button');
+      bindBtn.className = 'btn primary';
+      bindBtn.textContent = '关 联 微 信 同 步';
+      bindBtn.style.width = '100%';
+      attachClickSfx(bindBtn);
+      bindBtn.onclick = async () => {
+        const url = await fetchAuthUrl();
+        if (url) location.replace(url);
+        else alert('云同步暂未配置，请稍后重试');
+      };
+      wrap.appendChild(bindBtn);
+    } else {
+      // === 状态 3：普通浏览器，可输入编号恢复 ===
+      const tip = document.createElement('div');
+      tip.className = 'sync-tip';
+      tip.textContent = '输入在微信中获得的 8 位编号，恢复云端进度';
+      wrap.appendChild(tip);
+
+      const recoverBtn = document.createElement('button');
+      recoverBtn.className = 'btn primary';
+      recoverBtn.textContent = '输 入 编 号 恢 复 进 度';
+      recoverBtn.style.width = '100%';
+      attachClickSfx(recoverBtn);
+      recoverBtn.onclick = () => promptCodeAndPull(render);
+      wrap.appendChild(recoverBtn);
+
+      const hint = document.createElement('div');
+      hint.className = 'sync-hint';
+      hint.textContent = '没有编号？在微信内打开本页面后会自动生成';
+      wrap.appendChild(hint);
+    }
+  };
+
+  render();
+  // 订阅 storage 变更：拉取/合并完成后自动刷新面板
+  const unsub = storage.onChange(render);
+  // 当面板从 DOM 卸载时取消订阅，避免内存泄漏
+  const observer = new MutationObserver(() => {
+    if (!document.body.contains(wrap)) {
+      unsub();
+      observer.disconnect();
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+
+  return wrap;
+}
+
+/** 弹窗输入编号 → 拉取进度 → 合并到本地 */
+async function promptCodeAndPull(refresh: () => void): Promise<void> {
+  const code = prompt('请输入 8 位同步编号：');
+  if (!code) return;
+  const trimmed = code.trim();
+  if (!/^\d{8}$/.test(trimmed)) {
+    alert('编号格式错误，必须是 8 位数字');
+    return;
+  }
+  const remote = await pullByCode(trimmed);
+  if (!remote) {
+    alert('未找到该编号，请检查是否输入正确');
+    return;
+  }
+  const changed = storage.mergeRemote(remote);
+  if (changed) {
+    // 也把本地（合并后）回推一次到服务器（仅当当前已绑定微信）
+    if (storage.getCloudCode()) {
+      void pushImmediate(remote);
+    }
+    alert('进度已恢复！');
+  } else {
+    alert('已是最新进度');
+  }
+  refresh();
 }
 
 export function hideOverlay(): void {

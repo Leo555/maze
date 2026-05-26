@@ -10,6 +10,7 @@ import './styles.css';
 import { Game } from './core/Game';
 import { isInWeChat, isStandalone } from './core/Environment';
 import { maybeShowAddToHomeScreen } from './ui/AddToHomeScreen';
+import { fetchAuthUrl } from './core/CloudSync';
 
 // === 全局环境标记（CSS 可针对 body[data-env] 做差异化样式）===
 // 在游戏初始化前打标，让首次绘制就带着正确的环境信息
@@ -80,6 +81,64 @@ new Game();
 // 第 2 次以上访问的 iOS Safari 用户，提示「添加到主屏」
 // 加到主屏后 localStorage 不再受 ITP 7 天清理影响，进度持久化大幅提升
 maybeShowAddToHomeScreen();
+
+// === 微信内首次访问 → 触发授权 ===
+// 在微信内第一次打开页面时，自动跳转到微信授权页（snsapi_base 静默授权），
+// 授权完回到 /api/wx/callback → 后台分配 8 位编号 → 重定向回首页 ?code=xxx
+//
+// 跳过条件（任一满足即不再触发）：
+//   - 不在微信内（普通浏览器）
+//   - 已存在身份 cookie（document.cookie 中含 maze_uid，意味着此设备已绑定）
+//   - URL 已带 wx=ok / wx=fail 参数（说明刚回调过，避免循环）
+//   - localStorage 里有 wx_skip 标记（用户主动选择"暂不授权"）
+const params = new URLSearchParams(location.search);
+const justReturned = params.get('wx') === 'ok' || params.get('wx') === 'fail';
+const hasUidCookie = document.cookie.includes('maze_uid=');
+const skipWxAuth = (() => {
+  try {
+    return localStorage.getItem('wx_skip_auth') === '1';
+  } catch {
+    return false;
+  }
+})();
+
+if (
+  isInWeChat() &&
+  !hasUidCookie &&
+  !justReturned &&
+  !skipWxAuth
+) {
+  // 异步获取授权 URL 后再跳转，避免阻塞渲染
+  void fetchAuthUrl().then((url) => {
+    if (url) {
+      // 用 location.replace 不留下历史栈记录
+      location.replace(url);
+    }
+  });
+}
+
+// 处理回调返回的 ?wx=ok&code=xxx：提示用户编号，并清理 URL
+if (justReturned) {
+  const wxStatus = params.get('wx');
+  if (wxStatus === 'ok') {
+    const code = params.get('code') || '';
+    if (code) {
+      // 延迟到 Game 启动完后再展示，避免与启动动画重叠
+      setTimeout(() => {
+        // 用最简单的 alert 兜底；后续可以接 Toast
+        // 注：alert 会同步阻断主线程，但用户主动的"我刚授权"瞬间无所谓
+        try {
+          // eslint-disable-next-line no-alert
+          alert(`同步成功！你的进度编号：${code}\n请截图保存，在其他设备输入即可恢复进度。`);
+        } catch {
+          /* ignore */
+        }
+      }, 800);
+    }
+  }
+  // 清理 URL，避免分享时泄露 code
+  history.replaceState(null, '', location.pathname + location.hash);
+}
 
 // === Vercel Web Analytics（延迟注入，避免阻塞首屏渲染）===
 // inject() 内部会同步加载 va.vercel-scripts.com 的 script.js（~3KB）
