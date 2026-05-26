@@ -37,8 +37,8 @@ export default async function handler(
   const openid = await exchangeOpenid(code);
   if (!openid) {
     // code 失效或换取失败：重定向回首页带错误标识
-    res.writeHead(302, { Location: '/?wx=fail' });
-    res.end();
+    res.setHeader('Location', '/?wx=fail');
+    res.status(302).end();
     return;
   }
 
@@ -46,10 +46,10 @@ export default async function handler(
   // 真实进度合并在前端做（本地有进度时上行覆盖）
   const user = await ensureUser(openid, DEFAULT_SAVE);
 
+  // 关键：用 setHeader 而非 writeHead 来设置 Location，
+  // 否则 writeHead 的第二参数会覆盖之前 setUidCookie 设置的 Set-Cookie 头，
+  // 导致前端拿不到身份 cookie，后续所有 /api/me /api/save 都会 401。
   setUidCookie(res, openid);
-  // 把 code 也带回前端，让 UI 立刻能展示
-  res.writeHead(302, {
-    Location: `/?wx=ok&code=${encodeURIComponent(user.code)}`,
-  });
-  res.end();
+  res.setHeader('Location', `/?wx=ok&code=${encodeURIComponent(user.code)}`);
+  res.status(302).end();
 }
