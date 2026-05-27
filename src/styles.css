@@ -60,9 +60,12 @@ body {
   height: 100vh;
   height: 100dvh;
   height: var(--app-height, 100dvh);
-  /* iOS 安全区（刘海屏 / 圆角），从主屏全屏启动时尤其重要 */
-  padding: env(safe-area-inset-top) env(safe-area-inset-right)
-    env(safe-area-inset-bottom) env(safe-area-inset-left);
+  /*
+   * 不在 body 上整体加安全区 padding，
+   * 否则会与各 HUD 元素（hud-top / hud-corner / minimap / touch-pad / a2hs-banner / global-toast）
+   * 自身的 env(safe-area-inset-*) 叠加，造成双倍偏移把 UI 推出屏幕。
+   * Canvas 应该铺满整个 viewport（含刘海下方），各 HUD 元素各自处理安全区即可。
+   */
 }
 
 #app {
