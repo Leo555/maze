@@ -45,9 +45,6 @@ export function showShareDialog(): void {
       <div class="scene-subtitle">SHARE</div>
       <div class="qr-wrap">${svg}</div>
       <div class="qr-tip">${tipHtml}</div>
-      <div class="share-url-row">
-        <code class="share-url">${shareUrl}</code>
-      </div>
     `;
 
     // 自定义关闭：移除 modal 自身，触发音效

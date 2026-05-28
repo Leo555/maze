@@ -1202,6 +1202,19 @@ body {
 }
 
 /* ========== 分享游戏弹窗（复用 scene-card-qr 骨架） ========== */
+/*
+ * 宽度策略：
+ *   .scene-card-qr 用 align-items:center，子项按内容宽度居中而非撑满父容器，
+ *   导致父卡片宽度由 "最宽子项 + padding" 决定。同步弹窗 (QrDialog) 因有
+ *   qr-tip-security 那段 width:100% 的长安全提示自动把卡片撑到 ~380px；
+ *   分享弹窗没有同样的长内容，会塌缩到 .scene-card 的 min-width:360px，
+ *   视觉显窄。这里显式给一个目标宽度，与同步弹窗保持一致的视觉重量。
+ */
+.scene-card-share {
+  width: 380px;
+  max-width: calc(100vw - 48px);
+}
+
 /* 微信内引导文案：突出"右上角"提示 */
 .scene-card-share .share-tip-wechat {
   display: inline-block;
@@ -1220,25 +1233,6 @@ body {
   font-size: 16px;
   margin: 0 2px;
   letter-spacing: 0;
-}
-/* 链接预览行：等宽字体 + 浅底胶囊，方便用户视觉确认 */
-.scene-card-share .share-url-row {
-  width: 100%;
-  margin-top: 10px;
-  text-align: center;
-}
-.scene-card-share .share-url {
-  display: inline-block;
-  max-width: 100%;
-  padding: 6px 12px;
-  background: rgba(58, 52, 43, 0.05);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', 'Roboto Mono', monospace;
-  font-size: 12px;
-  color: var(--text-muted);
-  letter-spacing: 0.5px;
-  word-break: break-all;
 }
 
 /* ========== 最佳路径观察模式 浮窗 ========== */
@@ -1666,7 +1660,6 @@ body {
   .scene-card {
     padding: 36px 28px;
     min-width: 280px;
-    width: 86%;
     max-height: calc(100dvh - 40px);
     overflow-y: auto;
   }
