@@ -8,6 +8,7 @@ import { audio } from '../../core/Audio';
 import { storage } from '../../core/Storage';
 import { levels } from '../../config/levels';
 import { attachClickSfx, showOverlay } from './shared';
+import { showShareDialog } from './ShareDialog';
 
 /**
  * 计算当前进度，用于在主菜单显示「下一关」与总览
@@ -139,6 +140,26 @@ export function showMainMenu(handlers: {
     btnGroup.appendChild(selectBtn);
     btnGroup.appendChild(settingsBtn);
     card.appendChild(btnGroup);
+
+    // 分享按钮：卡片右上角图标（次要操作，不抢主按钮的视觉焦点）
+    // 仅图标，aria-label / title 提供语义；SVG 用 currentColor 跟随主题色
+    const shareBtn = document.createElement('button');
+    shareBtn.className = 'menu-icon-btn menu-share-btn';
+    shareBtn.type = 'button';
+    shareBtn.setAttribute('aria-label', '分享游戏');
+    shareBtn.title = '分享游戏';
+    shareBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="18" cy="5" r="3"></circle>
+        <circle cx="6" cy="12" r="3"></circle>
+        <circle cx="18" cy="19" r="3"></circle>
+        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+      </svg>
+    `;
+    attachClickSfx(shareBtn);
+    shareBtn.onclick = () => showShareDialog();
+    card.appendChild(shareBtn);
   };
 
   renderCard();

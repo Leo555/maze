@@ -353,6 +353,46 @@ body {
   box-shadow: var(--shadow-card);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
+  /* relative：让卡片右上角的图标按钮（如分享 menu-share-btn）能绝对定位锚定 */
+  position: relative;
+}
+
+/* 主菜单卡片右上角的图标按钮：视觉上仅是一个 SVG
+ * 保留 <button> 标签是为了 a11y / 键盘可达；样式上完全裸露
+ */
+.menu-icon-btn {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-soft);
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.15s, transform 0.1s;
+  -webkit-tap-highlight-color: transparent;
+  /* 取消浏览器默认按钮 min-height */
+  line-height: 0;
+}
+/* focus-visible：键盘聚焦时给一个低调的虚线提示，鼠标点击不显示 */
+.menu-icon-btn:focus { outline: none; }
+.menu-icon-btn:focus-visible {
+  color: var(--text);
+}
+.menu-icon-btn:hover {
+  color: var(--text);
+  transform: translateY(-1px);
+}
+.menu-icon-btn:active {
+  transform: scale(0.92);
+}
+.menu-icon-btn svg {
+  display: block;
 }
 
 .scene-title {
@@ -1159,6 +1199,46 @@ body {
   .scene-card-qr .qr-tip-secure {
     animation: none;
   }
+}
+
+/* ========== 分享游戏弹窗（复用 scene-card-qr 骨架） ========== */
+/* 微信内引导文案：突出"右上角"提示 */
+.scene-card-share .share-tip-wechat {
+  display: inline-block;
+  padding: 8px 14px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  letter-spacing: 0.5px;
+  color: #2a8064;
+  background: rgba(42, 157, 143, 0.1);
+  border: 1px solid rgba(42, 157, 143, 0.35);
+  border-radius: 8px;
+  font-weight: 500;
+}
+.scene-card-share .share-tip-wechat strong {
+  color: #1a6b50;
+  font-size: 16px;
+  margin: 0 2px;
+  letter-spacing: 0;
+}
+/* 链接预览行：等宽字体 + 浅底胶囊，方便用户视觉确认 */
+.scene-card-share .share-url-row {
+  width: 100%;
+  margin-top: 10px;
+  text-align: center;
+}
+.scene-card-share .share-url {
+  display: inline-block;
+  max-width: 100%;
+  padding: 6px 12px;
+  background: rgba(58, 52, 43, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', 'Roboto Mono', monospace;
+  font-size: 12px;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  word-break: break-all;
 }
 
 /* ========== 最佳路径观察模式 浮窗 ========== */
