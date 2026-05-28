@@ -207,8 +207,7 @@ export class Storage {
    * 例外：
    *   - 如果本机本地进度严格"更进度"（玩家在离线时通关了几关），
    *     这里也会被云端版本覆盖。这是 last-write-wins 设计的必要代价。
-   *     真正会丢失的极少：因为通关时已经触发过 pushDebounced，
-   *     上一次离线通关一旦联网就会推上去。
+   *     真正会丢失的极少：因为通关时会立即推送，离线场景下下次联网通关就会带着累计进度上去。
    */
   private async bootstrapCloud(): Promise<void> {
     try {
@@ -307,10 +306,10 @@ export class Storage {
     writeCookie(COOKIE_KEY, compactForCookie(this.data));
   }
 
-  /** 本地写完 + 云端防抖上行（如果已注册账号） */
+  /** 本地写完 + 云端立即上行（如果已注册账号） */
   private flush(): void {
     this.flushLocal();
-    if (this.cloudCode) cloud.pushDebounced(this.data);
+    if (this.cloudCode) void cloud.pushImmediate(this.data);
   }
 
   isUnlocked(levelId: number): boolean {
@@ -357,7 +356,7 @@ export class Storage {
     if (typeof document !== 'undefined') {
       document.cookie = `${COOKIE_KEY}=; Max-Age=0; Path=/; SameSite=Lax`;
     }
-    if (this.cloudCode) cloud.pushDebounced(this.data);
+    if (this.cloudCode) void cloud.pushImmediate(this.data);
     this.notifyChange();
   }
 
