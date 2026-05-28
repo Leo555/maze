@@ -2,11 +2,13 @@
  * GET /api/sync?code=xxxxxxxx
  *
  * 用 8 位字母数字 code 拉取进度（只读）。
+ * 鉴权：无（持有 code = 持有读权限）
+ * 同源校验：必须来自白名单 Origin/Referer，拦第三方网页直接拉取
  * 限流：同 IP 5 分钟最多 30 次。
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { json, getClientIp } from './_lib/http.js';
+import { json, checkOrigin, getClientIp } from './_lib/http.js';
 import { getProgress } from './_lib/kv.js';
 import { isValidCode } from '../shared/types.js';
 import { kv } from '@vercel/kv';
@@ -25,6 +27,11 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ): Promise<void> {
+  if (!checkOrigin(req)) {
+    json(res, 403, { error: 'forbidden' });
+    return;
+  }
+
   const code = String(req.query.code || '').trim();
   if (!isValidCode(code)) {
     json(res, 400, { error: 'bad_code' });
