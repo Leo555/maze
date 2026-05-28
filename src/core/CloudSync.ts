@@ -83,6 +83,33 @@ export async function pullByCode(code: string): Promise<SaveData | null> {
 }
 
 /**
+ * 把 8 位编号对应的账号"领取"到本机：
+ *   - 后端轮换该账号 token，旧设备立即失去写权限
+ *   - 新 token 通过 Set-Cookie 写到本机
+ *   - 之后本机用 cookie 写云端就是写到这个账号上
+ *
+ * 与 pullByCode 的区别：
+ *   - pullByCode = 只读，不影响账号归属
+ *   - adoptAccount = 切换账号归属到本机
+ */
+export async function adoptAccount(code: string): Promise<MeResponse | null> {
+  if (!/^\d{8}$/.test(code)) return null;
+  try {
+    const res = await fetch('/api/account/adopt', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+      cache: 'no-store',
+    });
+    if (res.status === 200) return (await res.json()) as MeResponse;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 推送本地进度到云端（需要 cookie）。
  * 使用模块级变量做 1.5s 防抖：通关密集时合并为一次写。
  */
@@ -127,6 +154,7 @@ export const cloud = {
   fetchMine,
   initAccount,
   pullByCode,
+  adoptAccount,
   pushDebounced,
   pushImmediate,
 };

@@ -381,6 +381,29 @@ export class Storage {
     return changed;
   }
 
+  /**
+   * 把指定编号对应的云端账号"领取"到本机（已通过 /api/account/adopt 完成 token 轮换）。
+   *
+   * 与 mergeRemote 的关键区别：
+   *   - mergeRemote：只读拉别人的进度，仅合并；本机仍是自己的账号
+   *   - adoptRemoteAccount：本机已经被切换为该账号，因此：
+   *       1. 本地存档**直接替换**为云端版本（不再 pickRicher，
+   *          否则用户期望的"恢复到二维码那个进度"可能被本机更进度的覆盖）
+   *       2. cloudCode + linkedCode 都同步为新编号
+   *       3. 后续 flush 会写到这个新账号的云端
+   *
+   * @param code 8 位编号（来自 adopt 响应）
+   * @param remote 该账号的云端进度（来自 adopt 响应）
+   */
+  adoptRemoteAccount(code: string, remote: SaveData): void {
+    this.data = remote;
+    this.flushLocal();
+    this.cloudCode = code;
+    this.linkedCode = code;
+    this.saveLinkedCode(code);
+    this.notifyChange();
+  }
+
   /** 解除编号关联（仅清理本地展示，不影响云端数据；登出时调用） */
   unlinkCode(): void {
     this.cloudCode = '';

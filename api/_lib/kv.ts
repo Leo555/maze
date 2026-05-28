@@ -221,6 +221,24 @@ export async function replaceProgress(
 }
 
 /**
+ * 轮换 user 的 token：生成全新 token 并写回 KV，旧 token 立即失效。
+ *
+ * 用途：
+ *   - 用户在新设备上输入/扫码本账号编号 adopt → 把账号"切换"到新设备时调用，
+ *     这样即使旧设备 cookie 仍在，也无法再继续写云端，避免两端互相覆盖。
+ *
+ * 返回新生成的 token（仅在内存中可见，调用方负责写到 cookie）。
+ */
+export async function rotateUserToken(userId: string): Promise<{ user: CloudUser; token: string } | null> {
+  const user = await getUserById(userId);
+  if (!user) return null;
+  const token = newToken();
+  const next: CloudUser = { ...user, token, updatedAt: Date.now() };
+  await kv.set(`user:${userId}`, next, { ex: USER_TTL_SECONDS });
+  return { user: next, token };
+}
+
+/**
  * v1 → v2 迁移辅助：
  *   - 把 user 记录的 code 字段改成 targetCode（老编号）
  *   - 让 code:{targetCode} 索引指向当前 userId

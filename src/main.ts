@@ -10,7 +10,7 @@ import './styles.css';
 import { Game } from './core/Game';
 import { isInWeChat, isStandalone } from './core/Environment';
 import { maybeShowAddToHomeScreen } from './ui/AddToHomeScreen';
-import { pullByCode } from './core/CloudSync';
+import { adoptAccount } from './core/CloudSync';
 import { storage } from './core/Storage';
 import { showToast } from './ui/Toast';
 
@@ -121,7 +121,10 @@ if (justReturned) {
 // === 处理 ?recover=xxxxxxxx：扫码 / 链接恢复进度 ===
 // 用户在另一台设备扫了同步面板的二维码，URL 形如：
 //   https://maze.lz5z.com/?recover=14815162
-// 自动调 /api/sync 拉取 → 合并到本地 → 持久化编号 → 提示恢复成功
+// 行为：调用 /api/account/adopt 把该编号对应账号"领取"到本机：
+//   - 后端轮换 token，原设备 cookie 失效（避免两端互相覆盖云端）
+//   - 本机的 maze_auth cookie 切到新账号
+//   - 本地存档直接替换为该账号的云端进度
 const recoverCode = params.get('recover');
 if (recoverCode && /^\d{8}$/.test(recoverCode)) {
   // 立刻清掉 URL 参数，避免用户截图分享时把编号泄露
@@ -131,17 +134,13 @@ if (recoverCode && /^\d{8}$/.test(recoverCode)) {
 
   // 异步执行：不阻塞游戏启动，结果由 toast 反馈
   void (async () => {
-    const remote = await pullByCode(recoverCode);
-    if (!remote) {
-      showToast('该编号不存在或已过期', 'error', 2400);
+    const me = await adoptAccount(recoverCode);
+    if (!me) {
+      showToast('该编号不存在或操作过于频繁', 'error', 2400);
       return;
     }
-    const changed = storage.mergeRemote(remote, recoverCode);
-    showToast(
-      changed ? '进度已自动恢复！' : '已是最新进度，无需更新',
-      changed ? 'success' : 'info',
-      2400
-    );
+    storage.adoptRemoteAccount(me.code, me.progress);
+    showToast(`已切换到编号 ${me.code} 的进度`, 'success', 2800);
   })();
 }
 
