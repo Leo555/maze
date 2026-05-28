@@ -187,8 +187,18 @@ export class Storage {
     const me = await cloud.fetchMine();
     if (!me) return;
     this.cloudCode = me.code;
-    // 同步到 linkedCode（保证 UI 在微信端也能稳定显示）
-    if (this.linkedCode !== me.code) {
+    /*
+     * linkedCode 仅在「本机从未关联过任何编号」时才用 cloudCode 初始化。
+     *
+     * 反例（真实 bug 场景）：
+     *   1. 微信内 A 已通关 → 自己的 cookie 账号编号 = X
+     *   2. A 扫了朋友的二维码 → mergeRemote 把 linkedCode 改成 Y
+     *   3. 重新打开页面 → bootstrapCloud 此时不能再把 linkedCode 改回 X，
+     *      否则 UI 上"我刚扫码恢复的编号"就会被自己的旧账号编号覆盖。
+     *
+     * 因此：仅当 linkedCode 为空时用 me.code 兜底，已有值则尊重用户最近一次的关联。
+     */
+    if (!this.linkedCode) {
       this.linkedCode = me.code;
       this.saveLinkedCode(me.code);
     }
