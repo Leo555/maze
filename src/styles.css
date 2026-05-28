@@ -197,6 +197,14 @@ body {
   gap: 6px;
 }
 
+/*
+ * 关卡指示项 (.level)：value 用等宽数字，避免 1/10/100 关之间宽度跳动
+ */
+.hud-top .item.level .value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
 .hud-top .icon {
   font-size: 16px;
   opacity: 0.9;

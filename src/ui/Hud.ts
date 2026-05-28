@@ -53,6 +53,9 @@ function isLightColor(color: string): boolean {
 export class Hud {
   root: HTMLElement;
   private topBar!: HTMLElement;
+  /** 关卡指示项（仅触屏设备渲染），用于在小屏上随时知道"我现在在第几关" */
+  private levelEl: HTMLElement | null = null;
+  private levelValueEl: HTMLElement | null = null;
   private timerEl!: HTMLElement;
   /** 缓存 timer / keys 内部 .value 节点，避免每帧 querySelector */
   private timerValueEl!: HTMLElement;
@@ -68,6 +71,7 @@ export class Hud {
   private lastTimerLevel: '' | 'warn' | 'critical' = '';
   private lastKeysText = '';
   private lastKeysVisible = false;
+  private lastLevelId = -1;
   private lastMuted: boolean | null = null;
   private lastHudFg = '';
   private lastAccent = '';
@@ -95,6 +99,18 @@ export class Hud {
     // 顶部信息条
     this.topBar = document.createElement('div');
     this.topBar.className = 'hud-top';
+
+    // 关卡指示（仅触屏设备渲染）：放最左侧，让玩家随时确认"我在第几关"
+    // PC 端不显示：屏幕大、按 Esc 进菜单或看 URL hash 都能看到关卡，避免冗余
+    if (this.isTouch) {
+      this.levelEl = document.createElement('div');
+      this.levelEl.className = 'item level';
+      this.levelEl.innerHTML =
+        `<span class="icon">🚩</span><span class="value">1</span>`;
+      this.levelValueEl = this.levelEl.querySelector('.value') as HTMLElement;
+      this.topBar.appendChild(this.levelEl);
+    }
+
     this.timerEl = document.createElement('div');
     this.timerEl.className = 'item timer';
     this.timerEl.innerHTML = `<span class="icon">⏱</span><span class="value">00:00</span>`;
@@ -335,6 +351,15 @@ export class Hud {
       }
     }
 
+    // 关卡号（仅触屏设备渲染了 levelEl）
+    if (this.levelValueEl) {
+      const levelId = data.config.id;
+      if (levelId !== this.lastLevelId) {
+        this.levelValueEl.textContent = String(levelId);
+        this.lastLevelId = levelId;
+      }
+    }
+
     // 静音
     if (data.muted !== this.lastMuted) {
       this.muteBtn.textContent = data.muted ? '🔇' : '🔊';
@@ -375,6 +400,7 @@ export class Hud {
     this.lastKeysText = '';
     this.lastTimerLevel = '';
     this.lastKeysVisible = false;
+    this.lastLevelId = -1;
     this.lastMuted = null;
     this.lastDarkTheme = null;
   }
