@@ -157,7 +157,18 @@ export class Storage {
     return true;
   }
 
+  /**
+   * 关卡是否解锁。
+   *
+   * 开发模式（vite dev / vite preview --mode development）下：
+   * 全部关卡解锁，方便联调任意关卡的迷宫生成 / 渲染 / 音效，
+   * 不必先把前面所有关卡通关。
+   *
+   * 生产构建：`import.meta.env.DEV` 是编译期常量 false，整段 if 会被
+   * esbuild DCE 掉，不会泄漏到线上产物中、对玩家行为无影响。
+   */
   isUnlocked(levelId: number): boolean {
+    // if (import.meta.env.DEV) return true;
     return levelId <= this.data.unlocked;
   }
 
