@@ -9,6 +9,25 @@ type Listener = {
   onPause?: () => void;
 };
 
+/**
+ * 判断事件目标是否是文本输入控件（input / textarea / contenteditable）。
+ * 用于：游戏全局快捷键监听器在文本输入态下让出，避免吞字符。
+ *
+ * 注意 input 还要排除 type=button/checkbox/radio 等不接受文本的类型；
+ * 简化处理：只把不接受文本的几个常见 type 排除掉。
+ */
+function isTextInputFocused(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
+  if (tag === 'TEXTAREA') return true;
+  if (tag === 'INPUT') {
+    const type = (target as HTMLInputElement).type.toLowerCase();
+    return !['button', 'checkbox', 'radio', 'submit', 'reset', 'file'].includes(type);
+  }
+  return false;
+}
+
 export class InputManager {
   private listeners: Listener[] = [];
   private keys = new Set<string>();
@@ -49,6 +68,11 @@ export class InputManager {
   }
 
   private onKeyDown = (e: KeyboardEvent) => {
+    // 焦点在文本输入控件上时，让浏览器原生处理按键，不要拦截。
+    // 否则 W/A/S/D/空格 / 方向键会被下面的 preventDefault 吞掉，
+    // 导致同步编号输入框、未来任何文本输入都打不进字符。
+    if (isTextInputFocused(e.target)) return;
+
     const k = e.key.toLowerCase();
     if (
       [
@@ -82,6 +106,8 @@ export class InputManager {
   };
 
   private onKeyUp = (e: KeyboardEvent) => {
+    // 同 onKeyDown：input 失焦后这里就不会再有遗留按键了
+    if (isTextInputFocused(e.target)) return;
     this.keys.delete(e.key.toLowerCase());
   };
 
