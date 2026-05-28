@@ -309,7 +309,30 @@ export class Storage {
   /** 本地写完 + 云端立即上行（如果已注册账号） */
   private flush(): void {
     this.flushLocal();
-    if (this.cloudCode) void cloud.pushImmediate(this.data);
+    if (this.cloudCode) {
+      void this.pushAndHandleAuth(this.data);
+    }
+  }
+
+  /**
+   * 推送进度并处理鉴权失效场景。
+   *
+   * 401 = cookie 已失效（典型场景：账号在另一设备被重新 adopt 之类的轮换；
+   * 或长时间未访问 cookie 已过期）。
+   * 此时本地 cloudCode 实际已经"无效"，应当清掉，让 UI 转为"未绑定云账号"状态，
+   * 引导用户去设置页重新绑定编号——否则用户会陷入"看似一切正常但永远同步不上"的盲区。
+   */
+  private async pushAndHandleAuth(progress: SaveData): Promise<void> {
+    const result = await cloud.pushImmediate(progress);
+    if (result.ok) return;
+    if (result.status === 401) {
+      // 账号在云端已不可用：清本地 cloudCode（保留 linkedCode 让用户仍能看到自己的编号）
+      this.cloudCode = '';
+      this.notifyChange();
+      // 不 toast 在这里：通关页正在显示 results，弹 toast 体验差；
+      // 让设置页/UI 通过 onChange 自然反映状态变化即可。
+    }
+    // 网络错误（status: 0）静默忽略，下次通关会再试
   }
 
   isUnlocked(levelId: number): boolean {
@@ -356,7 +379,7 @@ export class Storage {
     if (typeof document !== 'undefined') {
       document.cookie = `${COOKIE_KEY}=; Max-Age=0; Path=/; SameSite=Lax`;
     }
-    if (this.cloudCode) void cloud.pushImmediate(this.data);
+    if (this.cloudCode) void this.pushAndHandleAuth(this.data);
     this.notifyChange();
   }
 

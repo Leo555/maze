@@ -108,11 +108,21 @@ export async function adoptAccount(code: string): Promise<MeResponse | null> {
 
 /**
  * 推送本地进度到云端（需要 cookie）。
- * 通关时立即调用，不做防抖；失败 fire-and-forget。
+ * 通关时立即调用，不做防抖。
+ *
+ * 返回值含义：
+ *   - { ok: true, progress }：推送成功
+ *   - { ok: false, status: 401 }：cookie 失效（账号已被 adopt 到其他设备 / cookie 过期）
+ *     调用方应该清理本地 cloudCode 并提示用户重新绑定
+ *   - { ok: false, status: 0 }：网络错误等其他失败，不必清账号状态（下次通关再试）
  */
-export async function pushImmediate(
-  progress: SaveData
-): Promise<SaveData | null> {
+export interface PushResult {
+  ok: boolean;
+  status: number;
+  progress?: SaveData;
+}
+
+export async function pushImmediate(progress: SaveData): Promise<PushResult> {
   try {
     const res = await fetch('/api/save', {
       method: 'POST',
@@ -123,11 +133,11 @@ export async function pushImmediate(
     });
     if (res.status === 200) {
       const data = (await res.json()) as SaveResponse;
-      return data.progress;
+      return { ok: true, status: 200, progress: data.progress };
     }
-    return null;
+    return { ok: false, status: res.status };
   } catch {
-    return null;
+    return { ok: false, status: 0 };
   }
 }
 
