@@ -69,30 +69,39 @@ body {
 }
 
 #app {
-  position: relative;
+  /*
+   * 用 fixed + inset:0 锁死铺满视口，独立于文档流，
+   * 这样无论 body 内 SEO 区域有多少内容，#app 都始终覆盖整屏；
+   * 同时给一个高 z-index，避免 SEO 区域偶然层级冒出来露白。
+   */
+  position: fixed;
+  inset: 0;
   width: 100%;
   height: 100%;
+  height: 100dvh;
+  height: var(--app-height, 100dvh);
   overflow: hidden;
+  background: var(--bg);
+  z-index: 1;
 }
 
 /* ========== SEO 内容区 ==========
- * 白帽呈现：DOM 真实存在、文字颜色/尺寸正常，不使用 left:-10000px / display:none
- * / visibility:hidden 这类"伪隐藏"以避免被搜索引擎判为 cloaking。
+ * 白帽呈现：DOM 真实存在、文字尺寸正常、可被屏幕阅读器读到，
+ * 不使用 display:none / visibility:hidden / left:-10000px 这类"伪隐藏"。
  *
- * 视觉上为何用户看不到？
- *   - body 全局 overflow:hidden（见上方 html,body 规则）
- *   - #app 绝对定位铺满 100% viewport（见上一规则块）
- *   - 因此 .seo-content 出现在 #app 之后的正常文档流中，但被 #app 完全覆盖；
- *     页面又不允许滚动，玩家看不到，但 Google/百度/360 抓取时仍能读到全部文字。
- *   - 屏幕阅读器照常可访问。
+ * 视觉上玩家为何看不到？
+ *   - #app 用 position:fixed; inset:0; z-index:1 把整个视口完全覆盖
+ *   - .seo-content 在文档流中，但被 #app 这块"画布层"完全盖住
+ *   - body 全局 overflow:hidden，玩家也无法滚动到 SEO 内容
+ *   - 但 DOM 真实存在，HTML 抓取时 Googlebot 可以读到全部文字
  */
 .seo-content {
-  /* 正常字号，避免 1px 字符触发 Google "tiny text" 信号 */
+  position: relative;
+  z-index: 0;
   font-size: 14px;
   line-height: 1.6;
   color: var(--text);
   padding: 24px;
-  /* 允许选中文字（默认全局 user-select:none 在这里放开，便于无障碍朗读/复制） */
   -webkit-user-select: text;
   user-select: text;
 }
