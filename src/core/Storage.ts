@@ -192,11 +192,24 @@ export class Storage {
     return updated;
   }
 
-  reset(): void {
-    this.data = { ...defaultSave };
+  /**
+   * 清除所有进度。
+   *
+   * 安全语义：必须等云端写入成功才视为"清除完成"，否则云端旧数据会在下次
+   * 启动 bootstrap 时被拉回来覆盖刚清空的本地，等于功能失效。
+   *
+   * @returns true = 本地与云端都已清除；false = 云端写入失败（本地仍保留旧值，未清除）
+   */
+  async reset(): Promise<boolean> {
+    const cleared = { ...defaultSave };
+    // 先尝试推云端：成功后再覆写本地，保证"两端一致"原子性
+    // 失败时本地不动，调用方可提示用户重试
+    const remote = await pushProgress(this.code, cleared);
+    if (!remote) return false;
+    this.data = cleared;
     this.flushLocal();
-    void pushProgress(this.code, this.data);
     this.notifyChange();
+    return true;
   }
 
   /**

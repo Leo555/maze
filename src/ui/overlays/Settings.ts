@@ -6,6 +6,7 @@ import { audio } from '../../core/Audio';
 import { storage } from '../../core/Storage';
 import { showToast } from '../Toast';
 import { attachClickSfx, showOverlay } from './shared';
+import { showConfirm } from './Confirm';
 import { buildSyncPanel } from './sync/SyncPanel';
 
 export function showSettings(onBack: () => void): void {
@@ -57,10 +58,33 @@ export function showSettings(onBack: () => void): void {
   resetBtn.style.flex = '1';
   resetBtn.textContent = '清 除 通 关 记 录';
   attachClickSfx(resetBtn);
-  resetBtn.onclick = () => {
-    if (confirm('确定要清除所有通关记录吗？此操作不可恢复。')) {
-      storage.reset();
-      showToast('已清除通关记录', 'success');
+  resetBtn.onclick = async () => {
+    const confirmed = await showConfirm({
+      title: '清除通关记录',
+      message:
+        '此操作将清除所有关卡通关进度与三星记录，且不可恢复。\n请确认是否继续？',
+      confirmText: '确 定 清 除',
+      cancelText: '取  消',
+      danger: true,
+    });
+    if (!confirmed) return;
+
+    // 进度清除：云端写入成功才视为完成，避免云端旧数据下次启动覆盖本地
+    resetBtn.disabled = true;
+    const original = resetBtn.textContent;
+    resetBtn.textContent = '清 除 中...';
+    try {
+      const ok = await storage.reset();
+      if (ok) {
+        showToast('已清除通关记录', 'success');
+      } else {
+        showToast('云端同步失败，请检查网络后重试', 'error', 3000);
+      }
+    } catch {
+      showToast('清除失败，请稍后重试', 'error', 3000);
+    } finally {
+      resetBtn.disabled = false;
+      resetBtn.textContent = original;
     }
   };
   resetRow.appendChild(resetBtn);

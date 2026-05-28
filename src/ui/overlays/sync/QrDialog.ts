@@ -33,6 +33,9 @@ export function showQrDialog(
     const tipHtml = isReminder
       ? `请截图保存二维码或复制下方链接<br><span class="qr-tip-warn">否则更换设备 / 清缓存后进度将丢失</span>`
       : `建议截图保存或将链接发到自己的设备，<br>在其他设备扫码或打开链接即可恢复进度`;
+    // 安全提示：所有模式都展示。持有 code = 持有写权限，
+    // 把二维码 / 链接发给别人 = 把存档拱手让人，必须明确告知。
+    const securityTipHtml = `<span class="qr-tip-secure">⚠ 请勿将二维码或链接发给他人，否则对方可删除你的进度</span>`;
 
     const modal = document.createElement('div');
     modal.className = 'qr-modal';
@@ -44,8 +47,30 @@ export function showQrDialog(
       <div class="scene-subtitle">${subtitle}</div>
       <div class="qr-wrap">${svg}</div>
       <div class="qr-tip">${tipHtml}</div>
-      <div class="qr-code-tag">编号：<strong>${code}</strong></div>
+      <div class="qr-tip-security">${securityTipHtml}</div>
     `;
+
+    // 自定义关闭：移除 modal 自身，触发音效
+    const closeModal = (): void => {
+      audio.playSfx('ui_close');
+      modal.classList.remove('show');
+      // 等过渡动画结束后移除节点
+      setTimeout(() => modal.remove(), 280);
+    };
+
+    // 普通模式：右上角加 ✕ 图标关闭，节省底部按钮空间。
+    // reminder 模式（首次通关引导）保留底部"我已保存"主按钮，
+    // 强制玩家明确确认，避免没真截图就误关导致进度丢失。
+    if (!isReminder) {
+      const closeIcon = document.createElement('button');
+      closeIcon.className = 'qr-close-icon';
+      closeIcon.type = 'button';
+      closeIcon.setAttribute('aria-label', '关闭');
+      closeIcon.innerHTML = '✕';
+      attachClickSfx(closeIcon);
+      closeIcon.onclick = closeModal;
+      card.appendChild(closeIcon);
+    }
 
     const copyLinkBtn = document.createElement('button');
     copyLinkBtn.className = 'btn';
@@ -64,22 +89,17 @@ export function showQrDialog(
     };
     card.appendChild(copyLinkBtn);
 
-    const closeBtn = document.createElement('button');
-    closeBtn.className = 'btn primary';
-    closeBtn.textContent = isReminder ? '我 已 保 存' : '关 闭';
-    closeBtn.style.width = '100%';
-    closeBtn.style.marginTop = '8px';
-    attachClickSfx(closeBtn);
-
-    // 自定义关闭：移除 modal 自身，触发音效
-    const closeModal = (): void => {
-      audio.playSfx('ui_close');
-      modal.classList.remove('show');
-      // 等过渡动画结束后移除节点
-      setTimeout(() => modal.remove(), 280);
-    };
-    closeBtn.onclick = closeModal;
-    card.appendChild(closeBtn);
+    // reminder 模式保留底部主按钮（强确认）；normal 模式右上角 ✕ 已足够
+    if (isReminder) {
+      const confirmBtn = document.createElement('button');
+      confirmBtn.className = 'btn primary';
+      confirmBtn.textContent = '我 已 保 存';
+      confirmBtn.style.width = '100%';
+      confirmBtn.style.marginTop = '8px';
+      attachClickSfx(confirmBtn);
+      confirmBtn.onclick = closeModal;
+      card.appendChild(confirmBtn);
+    }
 
     // 点击 modal 蒙层（不是卡片）也关闭
     modal.addEventListener('click', (e) => {

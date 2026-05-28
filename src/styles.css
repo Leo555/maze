@@ -806,11 +806,16 @@ body {
 .settings-sync .sync-code-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 10px;
   background: var(--accent-soft);
-  padding: 10px 14px;
+  padding: 10px 12px 10px 14px;
   border-radius: 10px;
   border: 1px solid var(--border);
+}
+/* 编号信息（label + 编号值）占据左侧主区域，自动撑开 */
+.settings-sync .sync-code-info {
+  flex: 1 1 auto;
+  min-width: 0; /* flex 子项允许内容溢出收缩，避免编号长字符撑爆 */
 }
 .settings-sync .sync-code-label {
   font-size: 12px;
@@ -822,16 +827,51 @@ body {
   letter-spacing: 2px;
   color: var(--accent-strong);
   font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', 'Roboto Mono', monospace;
+  /* 编号若极长（虽然 8 位不会，但稳妥起见）超出时省略 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.settings-sync .sync-btn-row {
-  display: flex;
-  gap: 8px;
+/* 编号行内的小复制按钮：图标 + 文字组合，紧凑且醒目 */
+.settings-sync .sync-copy-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--accent-strong);
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s, color 0.15s;
+  white-space: nowrap;
 }
-.settings-sync .sync-btn-row .btn {
-  flex: 1;
+.settings-sync .sync-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.85);
+}
+.settings-sync .sync-copy-btn:active {
+  transform: scale(0.96);
+}
+.settings-sync .sync-copy-btn .sync-copy-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+.settings-sync .sync-copy-btn.copied {
+  color: var(--ok, #2a9d8f);
+  background: rgba(42, 157, 143, 0.08);
+  border-color: rgba(42, 157, 143, 0.3);
+}
+/* 输入其他编号 - 次要操作，独占一行，低视觉权重 */
+.settings-sync .sync-secondary {
+  width: 100%;
   font-size: 12px;
   padding: 8px 10px;
-  min-width: 0;
+  margin-top: 6px;
+  white-space: nowrap;
 }
 /* 二维码按钮 - 主要操作，独占一行 */
 .settings-sync .sync-qr {
@@ -897,13 +937,93 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  /* relative：让右上角的 .qr-close-icon 绝对定位锚定在卡片内 */
+  position: relative;
+}
+/* 右上角关闭图标（仅 normal 模式渲染，reminder 模式保留底部确认按钮） */
+.qr-close-icon {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  color: var(--text-soft);
+  font-size: 16px;
+  font-family: inherit;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+.qr-close-icon:hover {
+  background: rgba(58, 52, 43, 0.08);
+  color: var(--text);
+  border-color: var(--border);
+}
+.qr-close-icon:active {
+  transform: scale(0.92);
 }
 /* 文本类子元素需要铺满宽度，否则 flex item 默认 auto 宽度会让 text-align 失效 */
 .scene-card-qr .scene-title,
 .scene-card-qr .scene-subtitle,
-.scene-card-qr .qr-tip,
-.scene-card-qr .qr-code-tag {
+.scene-card-qr .qr-tip {
   width: 100%;
+}
+
+/* ========== 通用确认弹窗（与 qr-modal 共用蒙层骨架） ========== */
+.scene-card-confirm {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 300px;
+  max-width: min(420px, 92vw);
+  padding: 28px 28px 24px;
+}
+.scene-card-confirm .confirm-title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  color: var(--text);
+  text-align: center;
+  margin-bottom: 14px;
+}
+.scene-card-confirm .confirm-message {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-soft);
+  text-align: center;
+  margin-bottom: 22px;
+  padding: 0 4px;
+}
+.scene-card-confirm .confirm-btn-group {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  width: 100%;
+}
+.scene-card-confirm .confirm-btn-group .btn {
+  flex: 1;
+  white-space: nowrap;
+}
+/* 危险操作按钮：红色警示色 */
+.btn.confirm-danger {
+  background: rgba(230, 57, 70, 0.12);
+  border-color: rgba(230, 57, 70, 0.4);
+  color: #b8413c;
+  font-weight: 600;
+}
+.btn.confirm-danger:hover {
+  background: rgba(230, 57, 70, 0.2);
+  border-color: rgba(230, 57, 70, 0.6);
+}
+.btn.confirm-danger:active {
+  transform: scale(0.97);
 }
 
 /* ========== 输入同步编号弹窗（与 qr-modal 共用蒙层骨架） ========== */
@@ -993,18 +1113,44 @@ body {
   color: var(--accent-strong);
   font-weight: 600;
 }
-.scene-card-qr .qr-code-tag {
-  margin-top: 10px;
-  font-size: 13px;
-  color: var(--text-muted);
-  letter-spacing: 1px;
+/* 安全提示：放在二维码下方，醒目的红色警示胶囊
+ * 持有 code = 持有写权限，分享 = 让对方拿走存档
+ * 必须用红色警示色让玩家一眼看到、不会忽略
+ */
+.scene-card-qr .qr-tip-security {
+  width: 100%;
+  margin-top: 12px;
+  text-align: center;
 }
-.scene-card-qr .qr-code-tag strong {
-  color: var(--accent-strong);
-  font-size: 16px;
-  letter-spacing: 1.5px;
-  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', 'Roboto Mono', monospace;
-  margin-left: 4px;
+.scene-card-qr .qr-tip-secure {
+  display: inline-block;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.5px;
+  color: #b8413c;
+  background: rgba(230, 57, 70, 0.08);
+  border: 1px solid rgba(230, 57, 70, 0.35);
+  border-radius: 8px;
+  max-width: 100%;
+  box-sizing: border-box;
+  /* 轻微脉冲呼吸：吸引注意但不刺眼 */
+  animation: qr-secure-pulse 2.4s ease-in-out infinite;
+}
+@keyframes qr-secure-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(230, 57, 70, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(230, 57, 70, 0.12);
+  }
+}
+/* 用户偏好减少动效时禁用脉冲，保留静态样式 */
+@media (prefers-reduced-motion: reduce) {
+  .scene-card-qr .qr-tip-secure {
+    animation: none;
+  }
 }
 
 /* ========== 最佳路径观察模式 浮窗 ========== */

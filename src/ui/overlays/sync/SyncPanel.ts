@@ -27,9 +27,32 @@ export function buildSyncPanel(): HTMLElement {
     const codeRow = document.createElement('div');
     codeRow.className = 'sync-code-row';
     codeRow.innerHTML = `
-      <div class="sync-code-label">我的同步编号</div>
-      <div class="sync-code-value">${code}</div>
+      <div class="sync-code-info">
+        <div class="sync-code-label">我的同步编号</div>
+        <div class="sync-code-value">${code}</div>
+      </div>
     `;
+    // 复制按钮内嵌到编号行右侧，更紧凑也突出"主要操作"
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'sync-copy-btn';
+    copyBtn.type = 'button';
+    copyBtn.setAttribute('aria-label', '复制编号');
+    copyBtn.innerHTML = '<span class="sync-copy-icon" aria-hidden="true">⎘</span><span class="sync-copy-text">复 制</span>';
+    attachClickSfx(copyBtn);
+    copyBtn.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(code);
+        copyBtn.classList.add('copied');
+        copyBtn.querySelector<HTMLElement>('.sync-copy-text')!.textContent = '已 复 制';
+        setTimeout(() => {
+          copyBtn.classList.remove('copied');
+          copyBtn.querySelector<HTMLElement>('.sync-copy-text')!.textContent = '复 制';
+        }, 1500);
+      } catch {
+        showToast(`你的同步编号：${code}\n请手动长按复制`, 'info', 4000);
+      }
+    };
+    codeRow.appendChild(copyBtn);
     wrap.appendChild(codeRow);
 
     const tip = document.createElement('div');
@@ -37,36 +60,16 @@ export function buildSyncPanel(): HTMLElement {
     tip.textContent = '通关进度自动保存到云端；在其他设备输入此编号或扫码即可恢复进度';
     wrap.appendChild(tip);
 
-    const btnRow = document.createElement('div');
-    btnRow.className = 'sync-btn-row';
-
-    const copyBtn = document.createElement('button');
-    copyBtn.className = 'btn';
-    copyBtn.textContent = '复 制 编 号';
-    attachClickSfx(copyBtn);
-    copyBtn.onclick = async () => {
-      try {
-        await navigator.clipboard.writeText(code);
-        copyBtn.textContent = '已 复 制 ✓';
-        setTimeout(() => (copyBtn.textContent = '复 制 编 号'), 1500);
-      } catch {
-        showToast(`你的同步编号：${code}\n请手动长按复制`, 'info', 4000);
-      }
-    };
-    btnRow.appendChild(copyBtn);
-
     const inputBtn = document.createElement('button');
-    inputBtn.className = 'btn';
+    inputBtn.className = 'btn sync-secondary';
     inputBtn.textContent = '输 入 其 他 编 号';
     attachClickSfx(inputBtn);
     inputBtn.onclick = () => promptAdoptCode(render);
-    btnRow.appendChild(inputBtn);
-
-    wrap.appendChild(btnRow);
+    wrap.appendChild(inputBtn);
 
     const qrBtn = document.createElement('button');
     qrBtn.className = 'btn sync-qr';
-    qrBtn.textContent = '生 成 二 维 码 / 同 步 链 接';
+    qrBtn.textContent = '我 的 进 度 码 / 同 步 链 接';
     attachClickSfx(qrBtn);
     qrBtn.onclick = () => showQrDialog(code);
     wrap.appendChild(qrBtn);
