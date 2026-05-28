@@ -111,21 +111,100 @@ export async function adoptAccount(code: string): Promise<MeResponse | null> {
 
 /**
  * 推送本地进度到云端（需要 cookie）。
- * 使用模块级变量做 1.5s 防抖：通关密集时合并为一次写。
+ *
+ * 防抖策略：通关密集时合并为一次写；同时确保页面被关闭/切到后台前
+ * 一定能把最新进度送出去（微信内退出 webview 是常见场景）。
+ *
+ * 关键：
+ *   1. 800ms 短防抖 → 用户停手后很快推送，降低关页时机的窗口
+ *   2. visibilitychange / pagehide → 立即用 sendBeacon 同步发出 pending 数据
+ *      （fetch 在 unload 阶段不可靠；sendBeacon 是浏览器 API 中唯一保证关页前可发出的）
  */
+const PUSH_DEBOUNCE_MS = 800;
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingProgress: SaveData | null = null;
 
 export function pushDebounced(progress: SaveData): void {
   pendingProgress = progress;
-  if (pushTimer) return;
+  if (pushTimer) {
+    // 已有待发送的定时器：保留窗口期，在用户连续通关时合并为一次写
+    return;
+  }
   pushTimer = setTimeout(() => {
     pushTimer = null;
-    if (!pendingProgress) return;
-    void pushImmediate(pendingProgress);
+    const data = pendingProgress;
     pendingProgress = null;
-  }, 1500);
+    if (!data) return;
+    void pushImmediate(data);
+  }, PUSH_DEBOUNCE_MS);
 }
+
+/**
+ * 同步把 pending 进度送出（页面隐藏/卸载时调用）。
+ *
+ * 使用 navigator.sendBeacon：
+ *   - 浏览器允许在 unload / visibilitychange→hidden 阶段发出
+ *   - 不会被 fetch 那种 "page is being unloaded" 中断
+ *   - 不接受响应（不需要也不关心）
+ *
+ * 由于 sendBeacon 不带 `credentials: include` 选项，但**同源**请求会自动带 cookie，
+ * 我们站点是同源访问 /api/save，cookie 会随请求发送，鉴权依然有效。
+ */
+function flushPendingSync(): void {
+  if (!pendingProgress) return;
+  if (pushTimer) {
+    clearTimeout(pushTimer);
+    pushTimer = null;
+  }
+  const data = pendingProgress;
+  pendingProgress = null;
+
+  try {
+    if (
+      typeof navigator !== 'undefined' &&
+      typeof navigator.sendBeacon === 'function'
+    ) {
+      const blob = new Blob([JSON.stringify({ progress: data })], {
+        type: 'application/json',
+      });
+      const ok = navigator.sendBeacon('/api/save', blob);
+      if (ok) return;
+    }
+    // sendBeacon 不可用或失败 → fire-and-forget fetch（带 keepalive 提升 unload 时存活率）
+    void fetch('/api/save', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ progress: data }),
+      keepalive: true,
+      cache: 'no-store',
+    }).catch(() => {
+      /* fire-and-forget */
+    });
+  } catch {
+    /* 任何异常都不能影响关页流程 */
+  }
+}
+
+/**
+ * 安装页面卸载/隐藏时的强制 flush。
+ * 模块加载时调一次即可（main.ts 不需要额外接入）。
+ */
+function installFlushHooks(): void {
+  if (typeof window === 'undefined') return;
+  // visibilitychange→hidden：iOS Safari/微信切后台/锁屏前最可靠的"页面要不见了"信号
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      flushPendingSync();
+    }
+  });
+  // pagehide：bfcache 友好的 unload 替代，桌面/移动通用
+  window.addEventListener('pagehide', flushPendingSync);
+  // beforeunload 兜底（微信 X5 上行为不一致，多挂一道）
+  window.addEventListener('beforeunload', flushPendingSync);
+}
+
+installFlushHooks();
 
 /** 立即上行（不防抖）；返回服务端最终的进度（可能更进度） */
 export async function pushImmediate(
