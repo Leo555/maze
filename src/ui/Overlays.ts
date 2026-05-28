@@ -8,6 +8,7 @@
 import { audio } from '../core/Audio';
 import { storage } from '../core/Storage';
 import { showToast } from './Toast';
+import { isValidCode } from '../../shared/types';
 import {
   levels,
   CHAPTER_COUNT,
@@ -774,7 +775,7 @@ function buildSyncPanel(): HTMLElement {
 
     const qrBtn = document.createElement('button');
     qrBtn.className = 'btn sync-qr';
-    qrBtn.textContent = '生 成 同 步 二 维 码';
+    qrBtn.textContent = '生 成 二 维 码 / 邀 请 链 接';
     attachClickSfx(qrBtn);
     qrBtn.onclick = () => showQrDialog(code);
     wrap.appendChild(qrBtn);
@@ -799,8 +800,8 @@ async function promptAdoptCode(refresh: () => void): Promise<void> {
   const code = prompt('请输入 8 位同步编号：');
   if (!code) return;
   const trimmed = code.trim();
-  if (!/^\d{8}$/.test(trimmed)) {
-    showToast('编号格式错误，必须是 8 位数字', 'error');
+  if (!isValidCode(trimmed)) {
+    showToast('编号格式错误，必须是 8 位字母或数字', 'error');
     return;
   }
   const ok = await storage.adoptCode(trimmed);
@@ -813,14 +814,13 @@ async function promptAdoptCode(refresh: () => void): Promise<void> {
 }
 
 /**
- * 弹出二维码对话框：手机扫码即可在另一设备自动恢复进度。
+ * 弹出二维码 + 邀请链接对话框：扫码或复制链接给好友均可。
  *
- * 二维码内容设计：`https://maze.lz5z.com/?recover={code}`
- *   - 单一 URL，扫码后浏览器直接打开
- *   - main.ts 启动时检测 ?recover= 参数 → 自动调 sync 拉取并合并
- *   - 8 位数字 URL 短，QR 模块少，扫码识别成功率最高
+ * 二维码 / 链接内容：`{origin}/?recover={code}`
+ *   - main.ts 启动时检测 ?recover=xxxxxxxx → 自动切换到该 code
+ *   - 链接形式适合微信好友/朋友圈/IM 直接分享
  *
- * 离线生成：用 qrcode-generator 库本地算出 SVG，无任何网络请求。
+ * 离线生成：用 qrcode-generator 库本地算出 SVG，无网络请求。
  */
 function showQrDialog(code: string): void {
   // 用独立 modal 层叠在设置页之上，关闭只移除自身，不影响背后的设置页。
@@ -835,21 +835,38 @@ function showQrDialog(code: string): void {
     const card = document.createElement('div');
     card.className = 'scene-card scene-card-qr';
     card.innerHTML = `
-      <div class="scene-title">同 步 二 维 码</div>
-      <div class="scene-subtitle">SYNC QR CODE</div>
+      <div class="scene-title">同 步 进 度</div>
+      <div class="scene-subtitle">SYNC PROGRESS</div>
       <div class="qr-wrap">${svg}</div>
       <div class="qr-tip">
-        在另一台设备的浏览器扫描此二维码，<br>
-        即可自动恢复进度
+        在另一台设备扫描二维码，<br>
+        或将下方链接发给好友，即可自动同步进度
       </div>
       <div class="qr-code-tag">编号：<strong>${code}</strong></div>
     `;
+
+    const copyLinkBtn = document.createElement('button');
+    copyLinkBtn.className = 'btn';
+    copyLinkBtn.textContent = '复 制 邀 请 链 接';
+    copyLinkBtn.style.width = '100%';
+    copyLinkBtn.style.marginTop = '14px';
+    attachClickSfx(copyLinkBtn);
+    copyLinkBtn.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(url);
+        copyLinkBtn.textContent = '已 复 制 ✓';
+        setTimeout(() => (copyLinkBtn.textContent = '复 制 邀 请 链 接'), 1500);
+      } catch {
+        showToast(`链接：${url}\n请手动长按复制`, 'info', 5000);
+      }
+    };
+    card.appendChild(copyLinkBtn);
 
     const closeBtn = document.createElement('button');
     closeBtn.className = 'btn primary';
     closeBtn.textContent = '关 闭';
     closeBtn.style.width = '100%';
-    closeBtn.style.marginTop = '14px';
+    closeBtn.style.marginTop = '8px';
     attachClickSfx(closeBtn);
 
     // 自定义关闭：移除 modal 自身，触发音效

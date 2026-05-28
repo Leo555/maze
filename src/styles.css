@@ -788,11 +788,11 @@ body {
   color: var(--text-soft);
 }
 .settings-sync .sync-code-value {
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 700;
-  letter-spacing: 4px;
+  letter-spacing: 2px;
   color: var(--accent-strong);
-  font-variant-numeric: tabular-nums;
+  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', 'Roboto Mono', monospace;
 }
 .settings-sync .sync-btn-row {
   display: flex;
@@ -892,8 +892,8 @@ body {
 .scene-card-qr .qr-code-tag strong {
   color: var(--accent-strong);
   font-size: 16px;
-  letter-spacing: 3px;
-  font-variant-numeric: tabular-nums;
+  letter-spacing: 1.5px;
+  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', 'Roboto Mono', monospace;
   margin-left: 4px;
 }
 

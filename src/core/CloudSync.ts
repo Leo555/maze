@@ -9,6 +9,7 @@
  */
 
 import type { SaveData } from '../../shared/types';
+import { isValidCode } from '../../shared/types';
 
 interface SyncResponse {
   progress: SaveData;
@@ -20,7 +21,7 @@ interface SaveResponse {
 
 /** 用 8 位 code 拉取进度 */
 export async function pullByCode(code: string): Promise<SaveData | null> {
-  if (!/^\d{8}$/.test(code)) return null;
+  if (!isValidCode(code)) return null;
   try {
     const res = await fetch(`/api/sync?code=${encodeURIComponent(code)}`, {
       cache: 'no-store',
@@ -40,7 +41,7 @@ export async function pushProgress(
   code: string,
   progress: SaveData
 ): Promise<SaveData | null> {
-  if (!/^\d{8}$/.test(code)) return null;
+  if (!isValidCode(code)) return null;
   try {
     const res = await fetch('/api/save', {
       method: 'POST',

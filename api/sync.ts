@@ -1,13 +1,14 @@
 /**
- * GET /api/sync?code=12345678
+ * GET /api/sync?code=xxxxxxxx
  *
- * 用 8 位 code 拉取进度（只读）。
+ * 用 8 位字母数字 code 拉取进度（只读）。
  * 限流：同 IP 5 分钟最多 30 次。
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { json, getClientIp } from './_lib/http.js';
 import { getProgress } from './_lib/kv.js';
+import { isValidCode } from '../shared/types.js';
 import { kv } from '@vercel/kv';
 
 const RATE_LIMIT_WINDOW_SEC = 5 * 60;
@@ -25,7 +26,7 @@ export default async function handler(
   res: VercelResponse
 ): Promise<void> {
   const code = String(req.query.code || '').trim();
-  if (!/^\d{8}$/.test(code)) {
+  if (!isValidCode(code)) {
     json(res, 400, { error: 'bad_code' });
     return;
   }

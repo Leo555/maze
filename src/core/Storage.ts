@@ -20,6 +20,9 @@ import {
   type SaveData,
   type LevelRecord,
   normalizeSave,
+  isValidCode,
+  CODE_ALPHABET,
+  CODE_LENGTH,
   DEFAULT_SAVE,
 } from '../../shared/types';
 
@@ -27,13 +30,29 @@ const KEY = 'maze_save';
 const CODE_KEY = 'maze_code';
 const SAVE_VERSION = 1;
 
-/** 生成随机 8 位数字 code */
+/**
+ * 生成随机 8 位字母数字 code（字符集去掉易混淆字符）。
+ *
+ * 安全注意：
+ *   - 用 crypto.getRandomValues 而非 Math.random，保证不可预测
+ *   - 用拒绝采样（rejection sampling）去除模偏（modulo bias），
+ *     确保每个字符出现概率严格相等
+ */
 function generateCode(): string {
-  const arr = new Uint32Array(1);
-  crypto.getRandomValues(arr);
-  // [10000000, 99999999] 共 9e7 个值
-  const v = (arr[0] % 90000000) + 10000000;
-  return String(v);
+  const alphaLen = CODE_ALPHABET.length;
+  // 256 是 Uint8Array 单字节的取值范围；找到不大于 256 的 alphaLen 的最大整数倍
+  // 超过这个上限的随机字节直接丢弃，从而避免模偏
+  const cutoff = Math.floor(256 / alphaLen) * alphaLen;
+  const out: string[] = [];
+  const buf = new Uint8Array(CODE_LENGTH * 2); // 多取一些减少二次填充概率
+  while (out.length < CODE_LENGTH) {
+    crypto.getRandomValues(buf);
+    for (let i = 0; i < buf.length && out.length < CODE_LENGTH; i++) {
+      const b = buf[i];
+      if (b < cutoff) out.push(CODE_ALPHABET[b % alphaLen]);
+    }
+  }
+  return out.join('');
 }
 
 const defaultSave: SaveData = { ...DEFAULT_SAVE, v: SAVE_VERSION };
@@ -55,11 +74,11 @@ export class Storage {
     void this.pullFromCloud();
   }
 
-  /** 读 / 创建本机 code */
+  /** 读 / 创建本机 code（不接受老格式 8 位纯数字，发现就重新生成） */
   private loadOrCreateCode(): string {
     try {
       const saved = localStorage.getItem(CODE_KEY);
-      if (saved && /^\d{8}$/.test(saved)) return saved;
+      if (saved && isValidCode(saved)) return saved;
     } catch {
       /* ignore */
     }
@@ -121,7 +140,7 @@ export class Storage {
 
   /** 切换到指定 code（扫码 / 输入恢复）：替换本地 code + 拉一次云端 */
   async adoptCode(newCode: string): Promise<boolean> {
-    if (!/^\d{8}$/.test(newCode)) return false;
+    if (!isValidCode(newCode)) return false;
     const remote = await pullByCode(newCode);
     if (!remote) return false;
     this.code = newCode;

@@ -16,7 +16,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { json, checkOrigin, getClientIp } from './_lib/http.js';
 import { getProgress, setProgress } from './_lib/kv.js';
-import { normalizeSave } from '../shared/types.js';
+import { normalizeSave, isValidCode } from '../shared/types.js';
 import { kv } from '@vercel/kv';
 
 const RATE_LIMIT_WINDOW_SEC = 60;
@@ -55,7 +55,7 @@ export default async function handler(
   const raw = typeof req.body === 'string' ? safeJsonParse(req.body) : req.body;
   const body = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null;
   const code = String(body?.code || '').trim();
-  if (!/^\d{8}$/.test(code)) {
+  if (!isValidCode(code)) {
     json(res, 400, { error: 'bad_code' });
     return;
   }

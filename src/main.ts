@@ -14,6 +14,7 @@ import { isInWeChat, isStandalone } from './core/Environment';
 import { maybeShowAddToHomeScreen } from './ui/AddToHomeScreen';
 import { storage } from './core/Storage';
 import { showToast } from './ui/Toast';
+import { isValidCode } from '../shared/types';
 
 // === 全局环境标记（CSS 可针对 body[data-env] 做差异化样式）===
 {
@@ -88,7 +89,7 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | undefined> {
 
 async function bootstrap(): Promise<void> {
   // === 1. ?recover=xxxxxxxx：扫码 / 链接恢复 ===
-  if (recoverCode && /^\d{8}$/.test(recoverCode)) {
+  if (recoverCode && isValidCode(recoverCode)) {
     history.replaceState(null, '', location.pathname + location.hash);
     const ok = await withTimeout(storage.adoptCode(recoverCode), 1500);
     setTimeout(() => {
