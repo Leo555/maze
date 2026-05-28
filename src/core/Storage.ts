@@ -28,6 +28,8 @@ import {
 
 const KEY = 'maze_save';
 const CODE_KEY = 'maze_code';
+/** localStorage key：是否已经引导用户保存过同步入口（首次通关后展示一次） */
+const BACKUP_PROMPTED_KEY = 'maze_backup_prompted';
 const SAVE_VERSION = 1;
 
 /**
@@ -195,6 +197,34 @@ export class Storage {
     this.flushLocal();
     void pushProgress(this.code, this.data);
     this.notifyChange();
+  }
+
+  /**
+   * 是否需要在首次通关后引导用户保存同步二维码 / 链接。
+   *
+   * 触发条件：
+   *   - 用户已通关至少 1 关（unlocked >= 2）
+   *   - 还没有展示过这个引导（localStorage 标记不存在）
+   *
+   * 调用方（结算页）拿到 true 后弹引导，弹完调用 markBackupPrompted() 写入标记，
+   * 下次不再提示。
+   */
+  shouldPromptBackup(): boolean {
+    if (this.data.unlocked < 2) return false;
+    try {
+      return localStorage.getItem(BACKUP_PROMPTED_KEY) !== '1';
+    } catch {
+      return false;
+    }
+  }
+
+  /** 用户已被引导（或主动跳过）保存同步入口；下次不再提示 */
+  markBackupPrompted(): void {
+    try {
+      localStorage.setItem(BACKUP_PROMPTED_KEY, '1');
+    } catch {
+      /* ignore */
+    }
   }
 
   onChange(cb: () => void): () => void {

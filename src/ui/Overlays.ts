@@ -523,6 +523,16 @@ export function showResult(
       }, 400 + i * 250);
     }
   });
+
+  // 首次通关后引导用户保存同步入口（防止换设备/清缓存导致进度丢失）。
+  // 只触发一次，标记写入 localStorage；用户关掉对话框等同于"已知晓"。
+  if (storage.shouldPromptBackup()) {
+    storage.markBackupPrompted();
+    // 等结算页星星动画走完再弹，避免视觉抢焦点
+    setTimeout(() => {
+      showBackupReminder(storage.getCode());
+    }, 1500);
+  }
 }
 
 // ==================== 失败 ====================
@@ -743,7 +753,7 @@ function buildSyncPanel(): HTMLElement {
 
     const tip = document.createElement('div');
     tip.className = 'sync-tip';
-    tip.textContent = '通关进度自动同步到云端；其他设备输入此编号或扫码即可同步';
+    tip.textContent = '通关进度自动保存到云端；在其他设备输入此编号或扫码即可恢复进度';
     wrap.appendChild(tip);
 
     const btnRow = document.createElement('div');
@@ -775,7 +785,7 @@ function buildSyncPanel(): HTMLElement {
 
     const qrBtn = document.createElement('button');
     qrBtn.className = 'btn sync-qr';
-    qrBtn.textContent = '生 成 二 维 码 / 邀 请 链 接';
+    qrBtn.textContent = '生 成 二 维 码 / 同 步 链 接';
     attachClickSfx(qrBtn);
     qrBtn.onclick = () => showQrDialog(code);
     wrap.appendChild(qrBtn);
@@ -809,25 +819,36 @@ async function promptAdoptCode(refresh: () => void): Promise<void> {
     showToast('未找到该编号或操作过于频繁', 'error', 2400);
     return;
   }
-  showToast(`已切换到编号 ${trimmed} 的进度`, 'success', 2400);
+  showToast(`已恢复编号 ${trimmed} 的进度`, 'success', 2400);
   refresh();
 }
 
 /**
- * 弹出二维码 + 邀请链接对话框：扫码或复制链接给好友均可。
+ * 弹出二维码 + 同步链接对话框：用于在自己其它设备上恢复进度。
  *
  * 二维码 / 链接内容：`{origin}/?recover={code}`
  *   - main.ts 启动时检测 ?recover=xxxxxxxx → 自动切换到该 code
- *   - 链接形式适合微信好友/朋友圈/IM 直接分享
+ *   - 链接形式适合发给自己的微信文件传输助手 / 收藏，便于后续在新设备打开
  *
  * 离线生成：用 qrcode-generator 库本地算出 SVG，无网络请求。
+ *
+ * @param mode 'normal' 设置页主动打开；'reminder' 首次通关后引导（标题/文案更强调）
  */
-function showQrDialog(code: string): void {
+function showQrDialog(code: string, mode: 'normal' | 'reminder' = 'normal'): void {
   // 用独立 modal 层叠在设置页之上，关闭只移除自身，不影响背后的设置页。
   // 不调 showOverlay（那个会 clearOverlay 把设置页清空，关闭时就只剩白屏）。
   const url = `${location.origin}/?recover=${encodeURIComponent(code)}`;
   void import('./Qr').then(({ generateQrSvg }) => {
     const svg = generateQrSvg(url, 240);
+
+    const isReminder = mode === 'reminder';
+    const title = isReminder ? '保 存 进 度' : '同 步 进 度';
+    const subtitle = isReminder ? 'SAVE YOUR PROGRESS' : 'SYNC PROGRESS';
+    const tipHtml = isReminder
+      ? `请截图保存二维码或复制下方链接<br>
+         <span style="color:var(--accent-strong);font-weight:600">否则更换设备 / 清缓存后进度将丢失</span>`
+      : `建议截图保存或将链接发到自己的设备，<br>
+         在其他设备扫码或打开链接即可恢复进度`;
 
     const modal = document.createElement('div');
     modal.className = 'qr-modal';
@@ -835,19 +856,16 @@ function showQrDialog(code: string): void {
     const card = document.createElement('div');
     card.className = 'scene-card scene-card-qr';
     card.innerHTML = `
-      <div class="scene-title">同 步 进 度</div>
-      <div class="scene-subtitle">SYNC PROGRESS</div>
+      <div class="scene-title">${title}</div>
+      <div class="scene-subtitle">${subtitle}</div>
       <div class="qr-wrap">${svg}</div>
-      <div class="qr-tip">
-        在另一台设备扫描二维码，<br>
-        或将下方链接发给好友，即可自动同步进度
-      </div>
+      <div class="qr-tip">${tipHtml}</div>
       <div class="qr-code-tag">编号：<strong>${code}</strong></div>
     `;
 
     const copyLinkBtn = document.createElement('button');
     copyLinkBtn.className = 'btn';
-    copyLinkBtn.textContent = '复 制 邀 请 链 接';
+    copyLinkBtn.textContent = '复 制 同 步 链 接';
     copyLinkBtn.style.width = '100%';
     copyLinkBtn.style.marginTop = '14px';
     attachClickSfx(copyLinkBtn);
@@ -855,7 +873,7 @@ function showQrDialog(code: string): void {
       try {
         await navigator.clipboard.writeText(url);
         copyLinkBtn.textContent = '已 复 制 ✓';
-        setTimeout(() => (copyLinkBtn.textContent = '复 制 邀 请 链 接'), 1500);
+        setTimeout(() => (copyLinkBtn.textContent = '复 制 同 步 链 接'), 1500);
       } catch {
         showToast(`链接：${url}\n请手动长按复制`, 'info', 5000);
       }
@@ -864,7 +882,7 @@ function showQrDialog(code: string): void {
 
     const closeBtn = document.createElement('button');
     closeBtn.className = 'btn primary';
-    closeBtn.textContent = '关 闭';
+    closeBtn.textContent = isReminder ? '我 已 保 存' : '关 闭';
     closeBtn.style.width = '100%';
     closeBtn.style.marginTop = '8px';
     attachClickSfx(closeBtn);
@@ -889,6 +907,11 @@ function showQrDialog(code: string): void {
     // 触发入场动画（next frame 才能让浏览器先 paint 初始状态）
     requestAnimationFrame(() => modal.classList.add('show'));
   });
+}
+
+/** 首次通关后的"保存进度"引导（语义包装，复用 showQrDialog） */
+function showBackupReminder(code: string): void {
+  showQrDialog(code, 'reminder');
 }
 
 export function hideOverlay(): void {

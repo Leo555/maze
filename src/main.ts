@@ -94,7 +94,7 @@ async function bootstrap(): Promise<void> {
     const ok = await withTimeout(storage.adoptCode(recoverCode), 1500);
     setTimeout(() => {
       if (ok) {
-        showToast(`已切换到编号 ${recoverCode} 的进度`, 'success', 2800);
+        showToast(`已恢复编号 ${recoverCode} 的进度`, 'success', 2800);
       } else {
         showToast('编号不存在或操作过于频繁', 'error', 2400);
       }
