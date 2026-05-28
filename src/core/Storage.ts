@@ -1,5 +1,5 @@
 /**
- * 本地存档 + 云端同步（极简版）
+ * 本地存档 + 云端同步
  *
  * 设计：
  *   - 每个浏览器首次访问生成一个随机 8 位 code，存 localStorage
@@ -7,10 +7,12 @@
  *   - 启动时用 code 拉云端进度，覆盖本地（last-write-wins，云端为权威）
  *   - 扫码 / 输入别人的 code → 直接替换本机 code → 后续读写都到那个 code
  *
- * 持久化分层：
- *   1. localStorage（主）
- *   2. cookie（备份，应对 iOS Safari ITP 的 7 天 localStorage 清理）
- *   3. 云端（last-write-wins）
+ * 持久化：
+ *   - localStorage（本地）
+ *   - 云端（last-write-wins，跨设备的真正兜底）
+ *
+ * 历史上还写过 cookie 兜底 ITP 7 天清理；现在云端就是最强兜底，
+ * cookie 反而每次请求白浪费上行带宽，已移除。
  */
 
 import { pullByCode, pushProgress } from './CloudSync';
@@ -22,11 +24,8 @@ import {
 } from '../../shared/types';
 
 const KEY = 'maze_save';
-const COOKIE_KEY = 'maze_save';
 const CODE_KEY = 'maze_code';
 const SAVE_VERSION = 1;
-const COOKIE_MAX_AGE_SECONDS = 400 * 24 * 60 * 60;
-const COOKIE_MAX_BYTES = 3800;
 
 /** 生成随机 8 位数字 code */
 function generateCode(): string {
@@ -35,58 +34,6 @@ function generateCode(): string {
   // [10000000, 99999999] 共 9e7 个值
   const v = (arr[0] % 90000000) + 10000000;
   return String(v);
-}
-
-function readCookie(name: string): string | null {
-  if (typeof document === 'undefined') return null;
-  const prefix = `${name}=`;
-  for (const c of document.cookie ? document.cookie.split(';') : []) {
-    const t = c.trim();
-    if (t.startsWith(prefix)) {
-      try {
-        return decodeURIComponent(t.slice(prefix.length));
-      } catch {
-        return null;
-      }
-    }
-  }
-  return null;
-}
-
-function writeCookie(name: string, value: string): void {
-  if (typeof document === 'undefined') return;
-  try {
-    const isSecure = location.protocol === 'https:';
-    const parts = [
-      `${name}=${encodeURIComponent(value)}`,
-      `Max-Age=${COOKIE_MAX_AGE_SECONDS}`,
-      'Path=/',
-      'SameSite=Lax',
-    ];
-    if (isSecure) parts.push('Secure');
-    document.cookie = parts.join('; ');
-  } catch {
-    /* ignore */
-  }
-}
-
-/** 把存档压缩到 cookie 安全大小内（100 关全通关时记录会接近上限） */
-function compactForCookie(save: SaveData): string {
-  const full = JSON.stringify(save);
-  if (encodeURIComponent(full).length <= COOKIE_MAX_BYTES) return full;
-  const ids = Object.keys(save.records)
-    .map((k) => parseInt(k, 10))
-    .filter((n) => Number.isFinite(n))
-    .sort((a, b) => b - a);
-  const slim: SaveData = { v: save.v, records: {}, unlocked: save.unlocked };
-  for (const id of ids) {
-    slim.records[id] = save.records[id];
-    if (encodeURIComponent(JSON.stringify(slim)).length > COOKIE_MAX_BYTES) {
-      delete slim.records[id];
-      break;
-    }
-  }
-  return JSON.stringify(slim);
 }
 
 const defaultSave: SaveData = { ...DEFAULT_SAVE, v: SAVE_VERSION };
@@ -104,12 +51,29 @@ export class Storage {
   constructor() {
     this.code = this.loadOrCreateCode();
     this.data = this.loadLocal();
-    this.flushLocal();
+    this.cleanupLegacyCookie();
     this.bootstrapPromise = new Promise<void>((r) => (this.bootstrapResolve = r));
     void this.pullFromCloud();
   }
 
-  /** 读 / 创建本机 code（localStorage 优先） */
+  /**
+   * 清掉历史遗留的 `maze_save` cookie。
+   *
+   * 早期版本曾把存档双写到 cookie 兜底 iOS Safari ITP 的 7 天 localStorage 清理；
+   * 现在云端就是最强兜底，cookie 已废弃，但老用户浏览器里残留的旧 cookie
+   * 会让每次请求白带几 KB 上行带宽——启动时清一次即可。
+   */
+  private cleanupLegacyCookie(): void {
+    if (typeof document === 'undefined') return;
+    if (!document.cookie || !document.cookie.includes('maze_save=')) return;
+    try {
+      document.cookie = 'maze_save=; Max-Age=0; Path=/; SameSite=Lax';
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /** 读 / 创建本机 code */
   private loadOrCreateCode(): string {
     try {
       const saved = localStorage.getItem(CODE_KEY);
@@ -126,19 +90,10 @@ export class Storage {
     return fresh;
   }
 
-  /** 读取本地存档（localStorage + cookie，取存在的那份） */
+  /** 读取本地存档 */
   private loadLocal(): SaveData {
     try {
       const raw = localStorage.getItem(KEY);
-      if (raw) {
-        const parsed = normalizeSave(JSON.parse(raw));
-        if (parsed) return parsed;
-      }
-    } catch {
-      /* ignore */
-    }
-    try {
-      const raw = readCookie(COOKIE_KEY);
       if (raw) {
         const parsed = normalizeSave(JSON.parse(raw));
         if (parsed) return parsed;
@@ -150,13 +105,11 @@ export class Storage {
   }
 
   private flushLocal(): void {
-    const json = JSON.stringify(this.data);
     try {
-      localStorage.setItem(KEY, json);
+      localStorage.setItem(KEY, JSON.stringify(this.data));
     } catch {
       /* ignore */
     }
-    writeCookie(COOKIE_KEY, compactForCookie(this.data));
   }
 
   /** 启动时拉云端，存在则覆盖本地 */
