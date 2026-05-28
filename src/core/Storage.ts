@@ -51,26 +51,8 @@ export class Storage {
   constructor() {
     this.code = this.loadOrCreateCode();
     this.data = this.loadLocal();
-    this.cleanupLegacyCookie();
     this.bootstrapPromise = new Promise<void>((r) => (this.bootstrapResolve = r));
     void this.pullFromCloud();
-  }
-
-  /**
-   * 清掉历史遗留的 `maze_save` cookie。
-   *
-   * 早期版本曾把存档双写到 cookie 兜底 iOS Safari ITP 的 7 天 localStorage 清理；
-   * 现在云端就是最强兜底，cookie 已废弃，但老用户浏览器里残留的旧 cookie
-   * 会让每次请求白带几 KB 上行带宽——启动时清一次即可。
-   */
-  private cleanupLegacyCookie(): void {
-    if (typeof document === 'undefined') return;
-    if (!document.cookie || !document.cookie.includes('maze_save=')) return;
-    try {
-      document.cookie = 'maze_save=; Max-Age=0; Path=/; SameSite=Lax';
-    } catch {
-      /* ignore */
-    }
   }
 
   /** 读 / 创建本机 code */
