@@ -888,15 +888,37 @@ body {
   transform: scale(1);
 }
 
+/* QR 弹窗卡片：flex 列布局，子元素水平居中
+ * 之前只声明了 align-items 但没声明 display:flex，是无效写法；
+ * 浏览器仍走 block 布局，inline-block 的 .qr-wrap margin auto 不生效，
+ * 在某些移动端宽度下二维码会出现视觉偏移。改为真 flex 列彻底消除歧义。
+ */
 .scene-card-qr {
+  display: flex;
+  flex-direction: column;
   align-items: center;
+}
+/* 文本类子元素需要铺满宽度，否则 flex item 默认 auto 宽度会让 text-align 失效 */
+.scene-card-qr .scene-title,
+.scene-card-qr .scene-subtitle,
+.scene-card-qr .qr-tip,
+.scene-card-qr .qr-code-tag {
+  width: 100%;
 }
 
 /* ========== 输入同步编号弹窗（与 qr-modal 共用蒙层骨架） ========== */
 .scene-card-input {
+  display: flex;
+  flex-direction: column;
   align-items: center;
   min-width: 320px;
   padding: 36px 32px 28px;
+}
+/* 同 .scene-card-qr：flex 子项需要显式铺满宽度让 text-align 居中生效 */
+.scene-card-input .scene-title,
+.scene-card-input .scene-subtitle,
+.scene-card-input .input-tip {
+  width: 100%;
 }
 .scene-card-input .input-tip {
   font-size: 13px;
@@ -943,13 +965,14 @@ body {
   flex: 1;
 }
 .scene-card-qr .qr-wrap {
-  margin: 18px auto 6px;
+  margin: 18px 0 6px;
   padding: 10px;
   background: #fff;
   border-radius: 12px;
   border: 1px solid var(--border);
   box-shadow: 0 4px 14px rgba(74, 60, 42, 0.08);
-  display: inline-block;
+  /* flex 容器子项：用 block 即可，由父级 align-items:center 居中 */
+  display: block;
   line-height: 0; /* 消除 svg 底部 inline 对齐空隙 */
 }
 .scene-card-qr .qr-wrap svg {
