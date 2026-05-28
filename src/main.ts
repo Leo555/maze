@@ -113,7 +113,12 @@ async function bootstrap(): Promise<void> {
 void bootstrap();
 
 // === Vercel Web Analytics（延迟注入，避免阻塞首屏渲染）===
+// 只在线上域名注入，避免本地 vite preview / 自部署环境出现
+// /_vercel/insights/script.js 404 噪声
+const isProdHost =
+  location.hostname === 'maze.lz5z.com' || location.hostname.endsWith('.vercel.app');
 const scheduleAnalytics = (): void => {
+  if (!isProdHost) return;
   import('@vercel/analytics').then(({ inject }) => {
     inject({ mode: import.meta.env.DEV ? 'development' : 'production' });
   });
