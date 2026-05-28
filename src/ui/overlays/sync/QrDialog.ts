@@ -28,11 +28,11 @@ export function showQrDialog(
     const isReminder = mode === 'reminder';
     const title = isReminder ? '保 存 进 度' : '同 步 进 度';
     const subtitle = isReminder ? 'SAVE YOUR PROGRESS' : 'SYNC PROGRESS';
+    // 注意：模板字符串中 <br> 后不能有真实换行 + 缩进，
+    // 否则 HTML 会把这些空白当作行首空格，导致中文居中文本视觉左偏
     const tipHtml = isReminder
-      ? `请截图保存二维码或复制下方链接<br>
-         <span style="color:var(--accent-strong);font-weight:600">否则更换设备 / 清缓存后进度将丢失</span>`
-      : `建议截图保存或将链接发到自己的设备，<br>
-         在其他设备扫码或打开链接即可恢复进度`;
+      ? `请截图保存二维码或复制下方链接<br><span class="qr-tip-warn">否则更换设备 / 清缓存后进度将丢失</span>`
+      : `建议截图保存或将链接发到自己的设备，<br>在其他设备扫码或打开链接即可恢复进度`;
 
     const modal = document.createElement('div');
     modal.className = 'qr-modal';

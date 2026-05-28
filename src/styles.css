@@ -959,9 +959,16 @@ body {
   font-size: 12px;
   color: var(--text-soft);
   text-align: center;
-  line-height: 1.55;
+  line-height: 1.7;
   margin-top: 12px;
   padding: 0 8px;
+}
+/* 警示文案：保存进度提醒里的红色加粗强调 */
+.scene-card-qr .qr-tip-warn {
+  display: inline-block;
+  margin-top: 4px;
+  color: var(--accent-strong);
+  font-weight: 600;
 }
 .scene-card-qr .qr-code-tag {
   margin-top: 10px;
