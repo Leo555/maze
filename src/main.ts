@@ -1,11 +1,16 @@
 /**
  * 应用入口
  *
- * 启动顺序：
- *   1. 处理 ?recover=xxxxxxxx：在 Game 初始化前完成 code 切换
- *   2. 等待 Storage bootstrap（拉云端最新进度），最多 1.5s 超时兜底
- *   3. new Game()
- *   4. 浏览器空闲时再注入 Vercel Analytics（非关键，不阻塞首屏）
+ * 启动顺序（首屏性能优先）：
+ *   1. 立即 new Game() —— 用本地存档启动，0 阻塞、首屏可交互
+ *   2. 后台并行：云端拉最新进度 / ?recover=xxxxxxxx adopt
+ *      —— 主菜单 & 同步面板已订阅 storage.onChange，
+ *         云端数据到了会自动刷新对应 UI，无需 await
+ *   3. 浏览器空闲时再注入 Vercel Analytics（非关键，不阻塞首屏）
+ *
+ * 性能历史：之前是 await storage.bootstrapPromise（最多 1500ms）后再 new Game()，
+ * 慢网下首屏 TTI 会被云端 RTT 拖到 1.5s+。改为立即启动后，即使在 4G/弱网
+ * 也能瞬开，云端进度晚到几百毫秒对玩家几乎不可感知（主菜单卡片会平滑刷新）。
  */
 
 import './styles.css';
@@ -64,54 +69,23 @@ document.addEventListener(
 const params = new URLSearchParams(location.search);
 const recoverCode = params.get('recover');
 
-/** Promise 超时兜底；超时不抛错只 resolve undefined */
-function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | undefined> {
-  return new Promise<T | undefined>((resolve) => {
-    let done = false;
-    const timer = setTimeout(() => {
-      if (done) return;
-      done = true;
-      resolve(undefined);
-    }, ms);
-    p.then((v) => {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      resolve(v);
-    }).catch(() => {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      resolve(undefined);
-    });
+// === 立即启动 Game（用本地存档，0 阻塞）===
+new Game();
+// 第 2 次以上访问的 iOS Safari 用户，提示「添加到主屏」
+maybeShowAddToHomeScreen();
+
+// === 后台异步：?recover=xxxxxxxx 扫码恢复 + 云端进度同步 ===
+// 主菜单 / 同步面板订阅了 storage.onChange，云端数据到了会自动刷新 UI
+if (recoverCode && isValidCode(recoverCode)) {
+  history.replaceState(null, '', location.pathname + location.hash);
+  storage.adoptCode(recoverCode).then((ok) => {
+    if (ok) {
+      showToast(`已恢复编号 ${recoverCode} 的进度`, 'success', 2800);
+    } else {
+      showToast('编号不存在或操作过于频繁', 'error', 2400);
+    }
   });
 }
-
-async function bootstrap(): Promise<void> {
-  // === 1. ?recover=xxxxxxxx：扫码 / 链接恢复 ===
-  if (recoverCode && isValidCode(recoverCode)) {
-    history.replaceState(null, '', location.pathname + location.hash);
-    const ok = await withTimeout(storage.adoptCode(recoverCode), 1500);
-    setTimeout(() => {
-      if (ok) {
-        showToast(`已恢复编号 ${recoverCode} 的进度`, 'success', 2800);
-      } else {
-        showToast('编号不存在或操作过于频繁', 'error', 2400);
-      }
-    }, 600);
-  }
-
-  // === 2. 等待云端进度 bootstrap 完成 ===
-  await withTimeout(storage.bootstrapPromise, 1500);
-
-  // === 3. 启动 Game ===
-  new Game();
-
-  // 第 2 次以上访问的 iOS Safari 用户，提示「添加到主屏」
-  maybeShowAddToHomeScreen();
-}
-
-void bootstrap();
 
 // === Vercel Web Analytics（延迟注入，避免阻塞首屏渲染）===
 // 只在线上域名注入，避免本地 vite preview / 自部署环境出现
