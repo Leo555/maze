@@ -862,6 +862,57 @@ body {
 .scene-card-qr {
   align-items: center;
 }
+
+/* ========== 输入同步编号弹窗（与 qr-modal 共用蒙层骨架） ========== */
+.scene-card-input {
+  align-items: center;
+  min-width: 320px;
+  padding: 36px 32px 28px;
+}
+.scene-card-input .input-tip {
+  font-size: 13px;
+  color: var(--text-soft);
+  letter-spacing: 1px;
+  margin: 14px 0 12px;
+  text-align: center;
+}
+.scene-card-input .code-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 16px;
+  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', 'Roboto Mono', monospace;
+  font-size: 18px;
+  letter-spacing: 2px;
+  text-align: center;
+  color: var(--text);
+  background: rgba(58, 52, 43, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+  /* 输入框需要允许选中文本（覆盖全局 user-select:none） */
+  -webkit-user-select: text;
+  user-select: text;
+}
+.scene-card-input .code-input::placeholder {
+  color: var(--text-muted);
+  letter-spacing: 1px;
+  font-weight: 400;
+}
+.scene-card-input .code-input:focus {
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.6);
+}
+.scene-card-input .btn-group {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  width: 100%;
+  margin-top: 18px;
+}
+.scene-card-input .btn-group .btn {
+  flex: 1;
+}
 .scene-card-qr .qr-wrap {
   margin: 18px auto 6px;
   padding: 10px;
