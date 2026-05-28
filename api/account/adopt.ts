@@ -1,27 +1,32 @@
 /**
  * POST /api/account/adopt
  *
- * 把指定 8 位编号对应的账号"领取"到本机。
+ * 把指定 8 位编号对应的账号"绑定"到本机：
  *   - 入参：{ code: '12345678' }
  *   - 行为：
  *     1. 校验 code 存在 → 找到 userId
- *     2. 轮换该用户 token（旧设备 cookie 立即失效）
- *     3. 把新 token 通过 Set-Cookie 写到本机的 maze_auth
- *     4. 返回 { code, progress }（账号此刻起被本机持有）
+ *     2. 把该账号当前 token 通过 Set-Cookie 写到本机的 maze_auth
+ *     3. 返回 { code, progress }
+ *
+ * 共享语义（多设备同账号）：
+ *   - 不轮换 token：所有持有此账号编号的设备都能 adopt 拿到同一个 token，
+ *     从而都具备写云端的权限
+ *   - 与 /api/save 的 last-write-wins 配合：任何端通关都覆盖云端，
+ *     其他端启动时拉到最新版本，自然实现"多端共享一份进度"
  *
  * 与 /api/sync 的区别：
- *   - /api/sync 仅只读拉取进度，不影响任何账号归属；
- *   - /api/adopt 真正"切换账号到本机"，调用后本机拥有该账号写权限，
- *     原持有该账号的设备需要重新 adopt 或重新 init 才能继续写云端。
+ *   - /api/sync 只读拉进度，不下发 cookie；
+ *   - /api/adopt 真正"把账号搬到本机"，调用后本机能写云端。
  *
  * 安全：
  *   - 同源校验
- *   - IP 限频（同 /api/sync 同水位，防止暴力枚举编号占用别人账号）
+ *   - IP 限频（防止暴力枚举编号）
+ *   - 编号是 8 位数字（[10000000, 99999999]），空间 ~9e7；配合限频足够。
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { setAuthCookie, json, checkOrigin } from '../_lib/http.js';
-import { getUserIdByCode, getUserById, rotateUserToken } from '../_lib/kv.js';
+import { getUserIdByCode, getUserById } from '../_lib/kv.js';
 import { kv } from '@vercel/kv';
 
 const RATE_LIMIT_WINDOW_SEC = 5 * 60;
@@ -83,28 +88,23 @@ export default async function handler(
     return;
   }
 
-  // 查 userId
+  // 查 userId 并取出账号当前 token
   const userId = await getUserIdByCode(code);
   if (!userId) {
     json(res, 404, { error: 'not_found' });
     return;
   }
-  const existing = await getUserById(userId);
-  if (!existing) {
+  const user = await getUserById(userId);
+  if (!user) {
     json(res, 404, { error: 'not_found' });
     return;
   }
 
-  // 轮换 token：旧设备的 cookie 立即失效，新 token 写入本机
-  const rotated = await rotateUserToken(userId);
-  if (!rotated) {
-    json(res, 500, { error: 'rotate_failed' });
-    return;
-  }
-
-  setAuthCookie(res, rotated.user.userId, rotated.token);
+  // 不轮换 token：直接把账号现有 token 下发到本机，
+  // 与原持有该账号的其他设备共享同一份写权限
+  setAuthCookie(res, user.userId, user.token);
   json(res, 200, {
-    code: rotated.user.code,
-    progress: rotated.user.progress,
+    code: user.code,
+    progress: user.progress,
   });
 }

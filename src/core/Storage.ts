@@ -182,40 +182,36 @@ export class Storage {
     }
   }
 
-  /** 启动时拉云端：cookie 有效时取「云端 vs 本地」更进度的一份 */
+  /**
+   * 启动时拉云端：云端是权威，直接用云端覆盖本地。
+   *
+   * 设计：last-write-wins 多设备共享语义
+   *   - 云端代表用户最后一次通关后的真实进度
+   *   - 本机本地存档可能是旧的（用户在另一台设备上又玩过），启动时应当被刷新
+   *   - 不再做 pickRicher：避免本机老旧/缓存的 localStorage 把云端最新的覆盖回来
+   *
+   * 例外：
+   *   - 如果本机本地进度严格"更进度"（玩家在离线时通关了几关），
+   *     这里也会被云端版本覆盖。这是 last-write-wins 设计的必要代价。
+   *     真正会丢失的极少：因为通关时已经触发过 pushDebounced，
+   *     上一次离线通关一旦联网就会推上去。
+   */
   private async bootstrapCloud(): Promise<void> {
     const me = await cloud.fetchMine();
     if (!me) return;
     this.cloudCode = me.code;
-    /*
-     * linkedCode 仅在「本机从未关联过任何编号」时才用 cloudCode 初始化。
-     *
-     * 反例（真实 bug 场景）：
-     *   1. 微信内 A 已通关 → 自己的 cookie 账号编号 = X
-     *   2. A 扫了朋友的二维码 → mergeRemote 把 linkedCode 改成 Y
-     *   3. 重新打开页面 → bootstrapCloud 此时不能再把 linkedCode 改回 X，
-     *      否则 UI 上"我刚扫码恢复的编号"就会被自己的旧账号编号覆盖。
-     *
-     * 因此：仅当 linkedCode 为空时用 me.code 兜底，已有值则尊重用户最近一次的关联。
-     */
+    // linkedCode 兜底：本机首次启动时用云端 code 填上，已经有值则保留用户视角
     if (!this.linkedCode) {
       this.linkedCode = me.code;
       this.saveLinkedCode(me.code);
     }
     const remote = normalizeSave(me.progress);
     if (remote) {
-      const merged = pickRicher(this.data, remote);
-      const changed =
-        merged !== this.data ||
-        JSON.stringify(merged) !== JSON.stringify(this.data);
-      if (changed) {
-        this.data = merged;
+      const same = JSON.stringify(remote) === JSON.stringify(this.data);
+      if (!same) {
+        this.data = remote;
         this.flushLocal();
         this.notifyChange();
-        // 反向：如果合并后比云端进度多，再回推一次（保持云本地一致）
-        if (pickRicher(merged, remote) !== remote) {
-          cloud.pushDebounced(this.data);
-        }
       }
     }
     this.notifyChange();

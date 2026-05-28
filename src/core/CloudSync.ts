@@ -9,9 +9,9 @@
  *
  * 设计原则：
  *   - 所有云调用 fire-and-forget：失败不影响游戏体验
- *   - 上行用最新进度（pickRicher 在服务端再做一次仲裁）
- *   - 与 Storage 解耦：CloudSync 只暴露 fetchMine / pullByCode / push / init
- *     合并逻辑由 Storage 调用方决定
+ *   - 上行采用 last-write-wins：服务端直接覆盖云端进度
+ *   - 与 Storage 解耦：CloudSync 只暴露 fetchMine / pullByCode / adoptAccount / push / init
+ *     合并/覆盖逻辑由 Storage 调用方决定
  */
 
 import type { SaveData, MeResponse } from '../../shared/types';
