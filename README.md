@@ -25,6 +25,15 @@ pnpm build
 pnpm preview
 ```
 
+## 环境变量
+
+> 建议在 Vercel 项目中配置，避免本地写死。
+
+- `ALLOWED_ORIGIN`：后端写接口允许的来源，支持逗号分隔多个域名
+
+推荐现网配置：
+- `ALLOWED_ORIGIN=https://maze.lz5z.com`
+
 ## 操作
 
 | 按键 | 行为 |

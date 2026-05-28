@@ -91,7 +91,7 @@ maybeShowAddToHomeScreen();
 //             微信授权变成「可选的跨设备找回」入口（设置页手动点）。
 // 因此这里不再自动 redirect，让微信内体验与普通浏览器一致。
 //
-// 保留 ?wx=ok / ?wx=fail 回调处理，因为「设置页手动点关联微信」仍走同一回调。
+// 保留 ?wx=ok / ?wx=fail 回调处理，兼容历史授权回调链接（老用户书签/二维码）。
 
 const params = new URLSearchParams(location.search);
 const justReturned = params.get('wx') === 'ok' || params.get('wx') === 'fail';

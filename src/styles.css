@@ -759,21 +759,7 @@ body {
   padding: 9px 10px;
   margin-top: 6px;
 }
-/* 关联微信 - 让微信账号成为跨设备找回入口（仅在 inWx + !hasWx 时出现） */
-.settings-sync .sync-bind-wx {
-  width: 100%;
-  font-size: 12px;
-  padding: 9px 10px;
-  margin-top: 6px;
-  background: #2c5e3a;
-  color: #fff;
-  border-color: #2c5e3a;
-}
-.settings-sync .sync-bind-wx:hover,
-.settings-sync .sync-bind-wx:active {
-  background: #234d2e;
-}
-/* 解除关联 - 次要操作，独占一行、低饱和 */
+/* 退出账号 - 次要操作，独占一行、低饱和 */
 .settings-sync .sync-unlink {
   width: 100%;
   font-size: 11px;

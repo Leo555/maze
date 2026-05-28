@@ -1,18 +1,13 @@
-/**
- * 清空身份 cookie 端点（仅供调试与用户主动登出使用）。
- *
- *   GET /api/wx/clear-cookie
- *
- * 流程：
- *   1. 删除 maze_auth + 历史 maze_uid cookie
- *   2. 302 重定向回首页
- *
- * 当前仅用于调试 cookie 链路与排查账号切换问题。
- */
-
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { clearAuthCookie, json } from '../_lib/http.js';
 
+/**
+ * 通用退出账号接口（与微信无关）
+ *
+ * GET /api/account/logout
+ * - 清除 maze_auth 与历史 maze_uid cookie
+ * - 302 回首页
+ */
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
@@ -22,7 +17,6 @@ export default async function handler(
     return;
   }
   clearAuthCookie(res);
-  // 用 setHeader 而非 writeHead，避免覆盖 Set-Cookie 头（callback.ts 同样的坑）
   res.setHeader('Location', '/');
   res.status(302).end();
 }

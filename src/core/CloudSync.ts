@@ -6,7 +6,6 @@
  *   - 必要时（首次通关）触发 /api/account/init 创建匿名账号
  *   - 用户输入编号或扫码后调用 /api/sync 拉取
  *   - 通关后调用 /api/save 上行（防抖 1.5s）
- *   - 微信内可触发 /api/wx/auth-url 拿授权链接
  *
  * 设计原则：
  *   - 所有云调用 fire-and-forget：失败不影响游戏体验
@@ -26,9 +25,6 @@ interface SaveResponse {
   progress: SaveData;
 }
 
-interface AuthUrlResponse {
-  url: string | null;
-}
 
 /**
  * 拉取自己的账号信息（基于 HttpOnly cookie）。
@@ -126,20 +122,6 @@ export async function pushImmediate(
   }
 }
 
-/** 取微信授权跳转 URL */
-export async function fetchAuthUrl(): Promise<string | null> {
-  try {
-    const res = await fetch('/api/wx/auth-url', { cache: 'no-store' });
-    if (res.status === 200) {
-      const data = (await res.json()) as AuthUrlResponse;
-      return data.url;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
 /** 聚合命名空间，方便 Storage 用 cloud.fetchMine() 形式调用 */
 export const cloud = {
   fetchMine,
@@ -147,5 +129,4 @@ export const cloud = {
   pullByCode,
   pushDebounced,
   pushImmediate,
-  fetchAuthUrl,
 };

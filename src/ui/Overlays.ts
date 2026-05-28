@@ -7,8 +7,7 @@
 
 import { audio } from '../core/Audio';
 import { storage } from '../core/Storage';
-import { isInWeChat } from '../core/Environment';
-import { fetchAuthUrl, pullByCode, pushImmediate } from '../core/CloudSync';
+import { pullByCode, pushImmediate } from '../core/CloudSync';
 import { showToast } from './Toast';
 import {
   levels,
@@ -700,20 +699,14 @@ export function showSettings(onBack: () => void): void {
 /**
  * 构造「同步进度」面板，加在设置页里。
  *
- * 三个独立状态维度：
- *   - linkedCode：用户已知的编号（含 PC 输入恢复后保存的）
- *   - cloudCode：能写云端的身份（首次通关后自动 init 时写入；本机已注册账号）
- *   - hasWx：当前账号是否已绑定微信 openid（仅做 UI 提示用）
+ * 两个状态维度：
+ *   - linkedCode：用户已知的编号（含输入恢复后保存）
+ *   - cloudCode：本机可写云端的身份（首次通关后自动 init）
  *
- * 状态决策（自顶向下匹配第一条满足的）：
- *   1. linkedCode + cloudCode → 已注册账号
- *      └ hasWx → "已绑定微信"，显示编号 + 二维码 + 解除微信关联
- *      └ 在微信内（未绑微信）→ 编号 + 二维码 + 关联微信（让微信端永久能找回）
- *      └ 普通浏览器 → 编号 + 二维码 + 输入其他编号
- *   2. linkedCode + 没 cloudCode → 仅恢复模式（输入了别人的编号）
- *      显示编号 + 输入其他编号 + 清除已恢复编号
- *   3. 都没有 → 还没玩过 / 未通关
- *      引导：通关 1 关后会自动有编号；或输入已有编号恢复进度
+ * 状态决策：
+ *   1. linkedCode + cloudCode → 已注册账号（编号 + 二维码 + 退出当前账号）
+ *   2. linkedCode + 没 cloudCode → 只读恢复模式（输入了别人的编号）
+ *   3. 都没有 → 还没玩过 / 未通关（引导通关后自动生成编号）
  */
 function buildSyncPanel(): HTMLElement {
   const wrap = document.createElement('div');
@@ -723,8 +716,6 @@ function buildSyncPanel(): HTMLElement {
     wrap.innerHTML = '';
     const linkedCode = storage.getLinkedCode();
     const cloudCode = storage.getCloudCode();
-    const hasWx = storage.getHasWx();
-    const inWx = isInWeChat();
 
     // 标题行
     const title = document.createElement('div');
@@ -737,16 +728,14 @@ function buildSyncPanel(): HTMLElement {
       const codeRow = document.createElement('div');
       codeRow.className = 'sync-code-row';
       codeRow.innerHTML = `
-        <div class="sync-code-label">${hasWx ? '我的同步编号 · 已关联微信' : '我的同步编号'}</div>
+        <div class="sync-code-label">我的同步编号</div>
         <div class="sync-code-value">${linkedCode}</div>
       `;
       wrap.appendChild(codeRow);
 
       const tip = document.createElement('div');
       tip.className = 'sync-tip';
-      tip.textContent = hasWx
-        ? '通关进度自动同步到云端；微信账号在任何设备打开本站都能找回'
-        : '通关进度自动同步到云端；其他设备输入此编号或扫码即可恢复';
+      tip.textContent = '通关进度自动同步到云端；其他设备输入此编号或扫码即可恢复';
       wrap.appendChild(tip);
 
       const btnRow = document.createElement('div');
@@ -784,32 +773,16 @@ function buildSyncPanel(): HTMLElement {
       qrBtn.onclick = () => showQrDialog(linkedCode);
       wrap.appendChild(qrBtn);
 
-      // 微信内未绑定 → 显示「关联微信」按钮（让此账号在跨设备微信中也能找回）
-      if (inWx && !hasWx) {
-        const bindBtn = document.createElement('button');
-        bindBtn.className = 'btn sync-bind-wx';
-        bindBtn.textContent = '关 联 微 信 ｜ 跨 设 备 找 回';
-        attachClickSfx(bindBtn);
-        bindBtn.onclick = async () => {
-          const url = await fetchAuthUrl();
-          if (url) location.replace(url);
-          else showToast('微信关联暂未配置', 'error');
-        };
-        wrap.appendChild(bindBtn);
-      }
-
-      // 解除关联按钮（次要操作）
       const unlinkBtn = document.createElement('button');
       unlinkBtn.className = 'btn sync-unlink';
-      unlinkBtn.textContent = hasWx ? '解 除 当 前 账 号 关 联' : '解 除 当 前 账 号 关 联';
+      unlinkBtn.textContent = '退 出 当 前 账 号';
       attachClickSfx(unlinkBtn);
       unlinkBtn.onclick = async () => {
-        const confirmMsg = hasWx
-          ? '解除关联后，本机将不再自动同步到云端（云端数据保留 1 年）。下次微信授权或输入编号可以再次找回。是否继续？'
-          : '解除关联后，本机将不再自动同步到云端（云端数据保留 1 年）。下次输入编号可以再次找回。是否继续？';
+        const confirmMsg =
+          '退出后，本机将不再自动同步到云端（云端数据保留 1 年）。下次输入编号可再次找回。是否继续？';
         if (!confirm(confirmMsg)) return;
         try {
-          await fetch('/api/wx/clear-cookie', { credentials: 'include' });
+          await fetch('/api/account/logout', { credentials: 'include' });
         } catch {
           /* ignore */
         }
@@ -935,7 +908,7 @@ function showQrDialog(code: string): void {
       <div class="scene-subtitle">SYNC QR CODE</div>
       <div class="qr-wrap">${svg}</div>
       <div class="qr-tip">
-        在另一台设备的浏览器（含微信内）扫描此二维码，<br>
+        在另一台设备的浏览器扫描此二维码，<br>
         即可自动恢复进度
       </div>
       <div class="qr-code-tag">编号：<strong>${code}</strong></div>

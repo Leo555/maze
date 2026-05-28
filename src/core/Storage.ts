@@ -4,10 +4,10 @@
  * 三层持久化（应对 iOS Safari ITP 清理 + 跨设备同步）：
  *   1. localStorage（主存储，优先读写）
  *   2. cookie（备份存储，max-age=400 天）
- *   3. 云端（Vercel KV，通过微信授权 / 8 位编号关联）
+ *   3. 云端（Vercel KV，通过匿名账号 token + 8 位编号）
  *
- * 写入：本地双写 + 云端防抖上行（带 cookie 时才上行）
- * 读取：启动时本地双读取较优 + 云端追拉（仅当 cookie 已绑定）
+ * 写入：本地双写 + 云端防抖上行（带账号 cookie 时上行）
+ * 读取：启动时本地双读取较优 + 云端追拉（仅当账号 cookie 已存在）
  *
  * 数据较小（100 关 record + 1 unlocked 字段，预计 < 4KB），cookie 完全装得下。
  */
@@ -33,8 +33,8 @@ const COOKIE_KEY = 'maze_save';
 /**
  * "已关联编号"持久化 key（独立于 maze_save，单独存）。
  * 这个值是用户在任何端"知道"的同步编号——
- * 微信里授权后会写入；PC 端输入编号恢复进度后也会写入。
- * 与 cloudCode 不同：cloudCode 仅在带有合法 maze_uid cookie 时才有意义（能写云端）。
+ * 本机注册账号后会写入；输入编号恢复进度后也会写入。
+ * 与 cloudCode 不同：cloudCode 仅在带有合法 maze_auth cookie 时才有意义（能写云端）。
  */
 const LINKED_CODE_KEY = 'maze_linked_code';
 const SAVE_VERSION = 1;
@@ -139,22 +139,20 @@ export class Storage {
   private data: SaveData;
   /**
    * 用户的 8 位同步编号 - "可写"模式。
-   * 仅当带有合法 maze_uid cookie（已通过微信授权）时才有值，
+   * 仅当带有合法 maze_auth cookie（已创建本机账号）时才有值，
    * 此时通关会触发云端上行（push）。
-   * 普通浏览器输入编号恢复进度时此值仍为空——因为 PC 端无权写云端。
+   * 普通浏览器输入编号恢复进度时此值仍为空——因为只读恢复不会获得写权限。
    */
   private cloudCode = '';
   /**
    * 用户已知的 8 位同步编号 - "可见"模式。
    * 比 cloudCode 范围更大：
-   *   - 微信里授权 → 同时写 cloudCode + linkedCode
-   *   - PC 端输入编号恢复进度 → 仅写 linkedCode（不写 cloudCode）
+   *   - 本机创建账号后 → 同时写 cloudCode + linkedCode
+   *   - 输入编号恢复进度 → 仅写 linkedCode（不写 cloudCode）
    * 用于 UI 在"任何端"都能展示用户的编号方便复制/再分享。
    * 持久化到 localStorage，关闭浏览器再打开仍可见。
    */
   private linkedCode = '';
-  /** 当前账号是否已绑定微信（仅做 UI 提示用） */
-  private hasWx = false;
   /** 监听器：进度变更时调用（用于 UI 自动刷新） */
   private listeners = new Set<() => void>();
 
@@ -189,7 +187,6 @@ export class Storage {
     const me = await cloud.fetchMine();
     if (!me) return;
     this.cloudCode = me.code;
-    this.hasWx = me.hasWx;
     // 同步到 linkedCode（保证 UI 在微信端也能稳定显示）
     if (this.linkedCode !== me.code) {
       this.linkedCode = me.code;
@@ -228,7 +225,6 @@ export class Storage {
         const me = await cloud.initAccount(this.data);
         if (me) {
           this.cloudCode = me.code;
-          this.hasWx = me.hasWx;
           if (this.linkedCode !== me.code) {
             this.linkedCode = me.code;
             this.saveLinkedCode(me.code);
@@ -284,7 +280,7 @@ export class Storage {
     writeCookie(COOKIE_KEY, compactForCookie(this.data));
   }
 
-  /** 本地写完 + 云端防抖上行（如果已关联微信/已注册账号） */
+  /** 本地写完 + 云端防抖上行（如果已注册账号） */
   private flush(): void {
     this.flushLocal();
     if (this.cloudCode) cloud.pushDebounced(this.data);
@@ -354,11 +350,6 @@ export class Storage {
     return this.linkedCode;
   }
 
-  /** 是否已绑定微信（用于设置页 UI 文案差异化） */
-  getHasWx(): boolean {
-    return this.hasWx;
-  }
-
   /**
    * 用一份外部存档（如 pullByCode 拿到的）合并进本地，取更进度。
    * @param code 可选；若提供则同时持久化到 linkedCode（PC 端输入恢复后调用）
@@ -384,7 +375,6 @@ export class Storage {
   unlinkCode(): void {
     this.cloudCode = '';
     this.linkedCode = '';
-    this.hasWx = false;
     this.saveLinkedCode('');
     this.notifyChange();
   }

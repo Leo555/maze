@@ -96,8 +96,6 @@ export const DEFAULT_SAVE: SaveData = {
 export interface MeResponse {
   /** 8 位编号 */
   code: string;
-  /** 是否已绑定微信（仅做 UI 提示用） */
-  hasWx: boolean;
   /** 当前进度 */
   progress: SaveData;
 }

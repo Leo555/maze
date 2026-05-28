@@ -1,18 +1,12 @@
 /**
- * 返回当前可用的微信授权跳转 URL。
+ * 兼容历史接口：GET /api/wx/auth-url
  *
- *   GET /api/wx/auth-url
- *
- * 前端在微信内首次访问时调用此接口，拿到 URL 后做 location.replace 跳转。
- * 把构造逻辑放后端的好处：AppID 改了无需改前端。
- *
- * 响应：
- *   200 { url } 或 200 { url: null } （未配置 AppID 时）
+ * 当前项目已切换为“匿名账号 + 编号/二维码同步”，
+ * 不再使用微信网页授权，因此固定返回 { url: null }。
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { json } from '../_lib/http.js';
-import { buildAuthUrl } from '../_lib/wx.js';
 
 export default async function handler(
   req: VercelRequest,
@@ -23,15 +17,5 @@ export default async function handler(
     return;
   }
 
-  if (!process.env.WX_APPID) {
-    json(res, 200, { url: null });
-    return;
-  }
-
-  // 回调地址：协议 + host + 我们的回调路由
-  const host = req.headers['x-forwarded-host'] || req.headers.host || 'maze.lz5z.com';
-  const proto = (req.headers['x-forwarded-proto'] as string) || 'https';
-  const redirect = `${proto}://${host}/api/wx/callback`;
-
-  json(res, 200, { url: buildAuthUrl(redirect) });
+  json(res, 200, { url: null });
 }

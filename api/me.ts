@@ -3,7 +3,7 @@
  *
  * 凭 maze_auth cookie 查自己的账号信息。
  *   - cookie 不存在或 token 不匹配 → 401 unauthenticated
- *   - 命中 → 返回 { code, hasWx, progress }
+ *   - 命中 → 返回 { code, progress }
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -26,7 +26,6 @@ export default async function handler(
   }
   json(res, 200, {
     code: user.code,
-    hasWx: !!user.openid,
     progress: user.progress,
   });
 }

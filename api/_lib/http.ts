@@ -78,14 +78,6 @@ export function clearAuthCookie(res: VercelResponse): void {
   ]);
 }
 
-/**
- * v1 历史 cookie：旧代码用 maze_uid 存储 openid 字符串。
- * callback 中需要读取它以执行迁移逻辑。
- */
-export function readLegacyUidCookie(req: VercelRequest): string | null {
-  return readCookie(req, LEGACY_UID_COOKIE);
-}
-
 /** 标准 JSON 响应 */
 export function json(
   res: VercelResponse,

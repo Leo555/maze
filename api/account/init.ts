@@ -5,7 +5,7 @@
  *   - 任何浏览器/微信内首次访问时调用
  *   - 后端生成 userId/token/code，写 KV
  *   - 通过 Set-Cookie 下发 maze_auth=userId.token
- *   - 响应体返回 { code, hasWx: false, progress }
+ *   - 响应体返回 { code, progress }
  *
  * 安全：
  *   - 强校验同源（防止恶意第三方站点替用户创建账号占资源）
@@ -50,7 +50,6 @@ export default async function handler(
   setAuthCookie(res, user.userId, user.token);
   json(res, 200, {
     code: user.code,
-    hasWx: false,
     progress: user.progress,
   });
 }
