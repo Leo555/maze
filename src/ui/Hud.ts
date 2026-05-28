@@ -156,47 +156,126 @@ export class Hud {
   }
 
   /**
-   * 移动端虚拟控制：
-   *   - 右下「十字 D-pad」：上 / 下 / 左 / 右 四个圆角按钮
-   *     · pointerdown 触发 onTouchDirStart（开始连续移动）
-   *     · pointerup / pointercancel / pointerleave 触发 onTouchDirEnd
+   * 移动端虚拟控制（v2 扇形 D-pad）：
+   *   - 整个 pad 是一个大触控区（180×180），按下后用「指针位置 → 角度 → 扇区」
+   *     判定方向，4 个 90° 扇区无缝邻接，没有死区，中心区域也归属
+   *     最近的方向，不再有"按到中间没反应"的尴尬
+   *   - pointerdown：根据落点判定方向 → onTouchDirStart
+   *   - pointermove：手指滑到其他扇区时，自动切换方向（先 End 旧方向再 Start 新方向）
+   *   - pointerup / pointercancel / 离开 window：onTouchDirEnd
+   *
+   *   设计权衡：
+   *     · 不再用 4 个独立 button，而是 1 个 container + 4 个纯视觉箭头
+   *     · 视觉箭头 pointer-events:none，不参与事件，只负责显示状态
+   *     · 中心圆点是"指针轨迹反馈"，可视化拇指滑动方向
    */
   private buildTouchControls(): void {
     const pad = document.createElement('div');
     pad.className = 'touch-pad';
     pad.setAttribute('aria-label', '方向控制');
 
-    const mkBtn = (dir: Direction, label: string, cls: string) => {
-      const btn = document.createElement('button');
-      btn.className = `touch-dir touch-dir-${cls}`;
-      btn.type = 'button';
-      btn.setAttribute('aria-label', label);
-      btn.textContent = label;
-      // 用 pointer 事件统一覆盖鼠标 / 触屏 / 触控笔
-      const start = (e: Event) => {
-        e.preventDefault();
-        btn.classList.add('active');
-        this.onTouchDirStart?.(dir);
-      };
-      const end = (e: Event) => {
-        e.preventDefault();
-        btn.classList.remove('active');
-        this.onTouchDirEnd?.(dir);
-      };
-      btn.addEventListener('pointerdown', start);
-      btn.addEventListener('pointerup', end);
-      btn.addEventListener('pointercancel', end);
-      btn.addEventListener('pointerleave', end);
-      // 阻止 button 的隐式 click 触发额外效果
-      btn.addEventListener('click', (e) => e.preventDefault());
-      return btn;
+    // 4 个纯视觉箭头 + 1 个中心点（都不接收事件）
+    const arrows: Record<Direction, HTMLElement> = {
+      up: this.mkArrow('up', '↑'),
+      left: this.mkArrow('left', '←'),
+      right: this.mkArrow('right', '→'),
+      down: this.mkArrow('down', '↓'),
+    };
+    const center = document.createElement('div');
+    center.className = 'touch-pad-center';
+    pad.appendChild(arrows.up);
+    pad.appendChild(arrows.left);
+    pad.appendChild(arrows.right);
+    pad.appendChild(arrows.down);
+    pad.appendChild(center);
+
+    let activeDir: Direction | null = null;
+    let activePointer: number | null = null;
+
+    /** 根据指针在 pad 容器内的坐标判定方向（4 扇区，每 90°） */
+    const dirFromPoint = (x: number, y: number, rect: DOMRect): Direction => {
+      // 以 pad 中心为原点；y 轴向下为正（屏幕坐标系）
+      const cx = rect.width / 2;
+      const cy = rect.height / 2;
+      const dx = x - cx;
+      const dy = y - cy;
+      // 用 |dx| vs |dy| 划分扇区：水平大就左/右；垂直大就上/下
+      // 这样划出的 4 个区是 4 个三角形，邻接无死区
+      if (Math.abs(dx) > Math.abs(dy)) {
+        return dx >= 0 ? 'right' : 'left';
+      }
+      return dy >= 0 ? 'down' : 'up';
     };
 
-    pad.appendChild(mkBtn('up', '↑', 'up'));
-    pad.appendChild(mkBtn('left', '←', 'left'));
-    pad.appendChild(mkBtn('right', '→', 'right'));
-    pad.appendChild(mkBtn('down', '↓', 'down'));
+    const setActiveDir = (next: Direction): void => {
+      if (next === activeDir) return;
+      // 切换方向：先结束旧的，再开始新的
+      if (activeDir) {
+        arrows[activeDir].classList.remove('active');
+        this.onTouchDirEnd?.(activeDir);
+      }
+      activeDir = next;
+      arrows[next].classList.add('active');
+      this.onTouchDirStart?.(next);
+    };
+
+    const clearActive = (): void => {
+      if (activeDir) {
+        arrows[activeDir].classList.remove('active');
+        this.onTouchDirEnd?.(activeDir);
+        activeDir = null;
+      }
+      pad.classList.remove('pressed');
+      activePointer = null;
+    };
+
+    pad.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      // 多指场景：仅响应第一个落下的指针，避免左手放屏幕上误触
+      if (activePointer !== null) return;
+      activePointer = e.pointerId;
+      pad.setPointerCapture(e.pointerId);
+      pad.classList.add('pressed');
+      const rect = pad.getBoundingClientRect();
+      setActiveDir(dirFromPoint(e.clientX - rect.left, e.clientY - rect.top, rect));
+    });
+
+    pad.addEventListener('pointermove', (e) => {
+      if (e.pointerId !== activePointer) return;
+      const rect = pad.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      // 在 pad 容器外较远时仍保持当前方向，避免滑出边缘瞬间误清；
+      // 留 25% 容差圈：超过这个圈就判定"手离开了"，结束当前方向
+      const EXIT_PAD = 0.25;
+      const insideX = x >= -rect.width * EXIT_PAD && x <= rect.width * (1 + EXIT_PAD);
+      const insideY = y >= -rect.height * EXIT_PAD && y <= rect.height * (1 + EXIT_PAD);
+      if (!insideX || !insideY) {
+        clearActive();
+        return;
+      }
+      setActiveDir(dirFromPoint(x, y, rect));
+    });
+
+    const onEnd = (e: PointerEvent): void => {
+      if (e.pointerId !== activePointer) return;
+      clearActive();
+    };
+    pad.addEventListener('pointerup', onEnd);
+    pad.addEventListener('pointercancel', onEnd);
+    // 浏览器/系统级中断（如来电）：兜底清理
+    window.addEventListener('blur', () => clearActive());
+
     this.root.appendChild(pad);
+  }
+
+  /** 创建 D-pad 内部的纯视觉箭头元素（不接收事件） */
+  private mkArrow(dir: Direction, label: string): HTMLElement {
+    const el = document.createElement('div');
+    el.className = `touch-arrow touch-arrow-${dir}`;
+    el.textContent = label;
+    el.setAttribute('aria-hidden', 'true');
+    return el;
   }
 
   getMinimapContainer(): HTMLElement {

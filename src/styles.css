@@ -301,9 +301,15 @@ body {
   border-color: rgba(255, 255, 255, 0.12);
   color: var(--hud-fg, #f5efe6);
 }
-.hud-dark-theme .touch-dir {
-  background: rgba(13, 17, 23, 0.55);
+.hud-dark-theme .touch-pad {
+  background-color: rgba(13, 17, 23, 0.5);
   border-color: rgba(255, 255, 255, 0.14);
+}
+.hud-dark-theme .touch-pad.pressed {
+  background-color: rgba(13, 17, 23, 0.72);
+}
+.hud-dark-theme .touch-arrow {
+  color: rgba(245, 239, 230, 0.8);
 }
 
 /* ========== 浮层 / 弹窗 ========== */
@@ -1280,68 +1286,115 @@ body {
 
 /* ========== 移动端虚拟控制 ========== */
 
-/* 虚拟方向键（D-pad）：右下角，便于右手拇指操作 */
+/* 虚拟方向键（D-pad v2）：右下角，单一大触控区 + 内嵌 4 个纯视觉箭头
+ * - 整个 pad 是一块连续触控区（默认 180×180），按到任何位置都会归到某个方向
+ * - 用「水平距离 vs 垂直距离」划 4 个三角扇区，邻接无死区
+ * - 拇指可以滑动，方向实时切换
+ */
 .touch-pad {
   position: absolute;
-  right: calc(16px + env(safe-area-inset-right));
-  bottom: calc(16px + env(safe-area-inset-bottom));
-  display: grid;
-  /* 3 列 × 3 行：上方中 / 中行左右 / 下方中 —— 通过 grid-area 摆十字 */
-  grid-template-columns: repeat(3, 56px);
-  grid-template-rows: repeat(3, 56px);
-  gap: 6px;
+  right: calc(20px + env(safe-area-inset-right));
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 6px 24px rgba(74, 60, 42, 0.12);
   z-index: 12;
-  /* 整体半透明，避免遮挡迷宫 */
-  opacity: 0.9;
-  filter: drop-shadow(0 6px 20px rgba(74, 60, 42, 0.15));
-  /* iOS 长按高亮 */
+  /* 整体半透明，避免遮挡迷宫；按下时透明度提升表示激活 */
+  opacity: 0.85;
+  transition: opacity 0.15s ease, background 0.15s ease;
+  /* 必须：让浏览器把所有触摸手势都交给我们处理（防止滚动 / 缩放）*/
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
+  /* 用 4 条对角线划分内部视觉象限（淡） */
+  background-image:
+    linear-gradient(45deg, transparent 49.6%, rgba(74, 60, 42, 0.08) 49.6% 50.4%, transparent 50.4%),
+    linear-gradient(-45deg, transparent 49.6%, rgba(74, 60, 42, 0.08) 49.6% 50.4%, transparent 50.4%);
 }
 
-.touch-dir {
-  width: 56px;
-  height: 56px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid var(--border);
-  color: var(--hud-fg, var(--text));
-  font-size: 22px;
-  font-family: inherit;
+.touch-pad.pressed {
+  opacity: 1;
+  background-color: rgba(255, 255, 255, 0.78);
+}
+
+/* 4 个纯视觉箭头：绝对定位摆在 D-pad 边缘，pointer-events:none 不参与事件
+ * 这样事件统一由 .touch-pad 容器接收，不存在按钮间死区 */
+.touch-arrow {
+  position: absolute;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
-  transition: transform 0.08s ease, background 0.12s ease,
-    border-color 0.12s ease;
-  /* 让方向键在按下时不被滑动手势误识别 */
-  touch-action: none;
-  user-select: none;
+  font-size: 24px;
+  color: var(--hud-fg, var(--text));
+  opacity: 0.55;
+  pointer-events: none; /* 关键：让父容器统一接收触控事件 */
+  transition: opacity 0.12s ease, transform 0.1s ease, color 0.12s ease;
+  font-family: inherit;
+  line-height: 1;
 }
 
-.touch-dir.active {
-  background: var(--accent-soft);
-  border-color: rgba(232, 168, 124, 0.7);
-  transform: scale(0.92);
+.touch-arrow-up {
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.touch-arrow-down {
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.touch-arrow-left {
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.touch-arrow-right {
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
-/* 摆放成十字：上=col2 row1 / 左=col1 row2 / 右=col3 row2 / 下=col2 row3 */
-.touch-dir-up {
-  grid-column: 2;
-  grid-row: 1;
+/* 高亮当前激活方向：变深 + 略微外推（视觉强化"我按的是这个方向"）*/
+.touch-arrow.active {
+  opacity: 1;
+  color: var(--accent-strong, var(--text));
 }
-.touch-dir-left {
-  grid-column: 1;
-  grid-row: 2;
+.touch-arrow-up.active {
+  transform: translateX(-50%) translateY(-2px) scale(1.15);
 }
-.touch-dir-right {
-  grid-column: 3;
-  grid-row: 2;
+.touch-arrow-down.active {
+  transform: translateX(-50%) translateY(2px) scale(1.15);
 }
-.touch-dir-down {
-  grid-column: 2;
-  grid-row: 3;
+.touch-arrow-left.active {
+  transform: translateY(-50%) translateX(-2px) scale(1.15);
+}
+.touch-arrow-right.active {
+  transform: translateY(-50%) translateX(2px) scale(1.15);
+}
+
+/* 中心点：拇指自然落点提示，按下时高亮 */
+.touch-pad-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(74, 60, 42, 0.25);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition: background 0.15s ease;
+}
+.touch-pad.pressed .touch-pad-center {
+  background: rgba(74, 60, 42, 0.45);
 }
 
 /* 响应式 */
@@ -1470,19 +1523,17 @@ body {
     width: 18px;
     height: 18px;
   }
-  /* 移动端 D-pad：稍微紧凑（保持右下） */
+  /* 移动端 D-pad：略缩小但保持单一大触控区设计 */
   .touch-pad {
-    grid-template-columns: repeat(3, 50px);
-    grid-template-rows: repeat(3, 50px);
-    gap: 5px;
-    right: calc(12px + env(safe-area-inset-right));
-    bottom: calc(12px + env(safe-area-inset-bottom));
+    width: 168px;
+    height: 168px;
+    right: calc(14px + env(safe-area-inset-right));
+    bottom: calc(14px + env(safe-area-inset-bottom));
   }
-  .touch-dir {
-    width: 50px;
-    height: 50px;
-    font-size: 20px;
-    border-radius: 12px;
+  .touch-arrow {
+    width: 40px;
+    height: 40px;
+    font-size: 22px;
   }
 
   /*
@@ -1530,13 +1581,13 @@ body {
     opacity: 0.7;
   }
   .touch-pad {
-    grid-template-columns: repeat(3, 46px);
-    grid-template-rows: repeat(3, 46px);
+    width: 152px;
+    height: 152px;
   }
-  .touch-dir {
-    width: 46px;
-    height: 46px;
-    font-size: 18px;
+  .touch-arrow {
+    width: 36px;
+    height: 36px;
+    font-size: 20px;
   }
 }
 
@@ -1566,14 +1617,14 @@ body {
     width: 90px;
     height: 90px;
   }
-  /* 横屏：D-pad 稍微缩小 */
+  /* 横屏：D-pad 稍微缩小（高度受限，避免遮挡迷宫） */
   .touch-pad {
-    grid-template-columns: repeat(3, 48px);
-    grid-template-rows: repeat(3, 48px);
+    width: 156px;
+    height: 156px;
   }
-  .touch-dir {
-    width: 48px;
-    height: 48px;
-    font-size: 18px;
+  .touch-arrow {
+    width: 38px;
+    height: 38px;
+    font-size: 20px;
   }
 }
