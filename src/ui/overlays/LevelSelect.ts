@@ -68,7 +68,10 @@ export function showLevelSelect(handlers: {
     const navItem = document.createElement('button');
     navItem.className = 'chapter-nav-item';
     if (!chapterUnlocked) navItem.classList.add('locked');
+    // 把章节主题色注入 CSS 变量，nav 项的激活态、hover 都跟章节风格联动
     navItem.style.setProperty('--chapter-color', theme.exit);
+    navItem.style.setProperty('--chapter-bg', theme.bg);
+    navItem.style.setProperty('--chapter-accent', theme.accent);
     navItem.innerHTML = `
       <span class="ci">${ci}</span>
       <span class="cn">${chapter.name}</span>
@@ -88,10 +91,19 @@ export function showLevelSelect(handlers: {
     section.className = 'chapter-section';
     section.dataset.chapterSection = String(ci);
     if (!chapterUnlocked) section.classList.add('locked');
+    // 章节卡片背景：用主题 bg 做轻微着色，让"翻到这一章"有"换天气"的体感，
+    // 而不是所有章节都白板一块。已锁章节的视觉降饱和由 .locked 类处理。
+    section.style.setProperty('--chapter-color', theme.exit);
+    section.style.setProperty('--chapter-bg', theme.bg);
+    section.style.setProperty('--chapter-floor', theme.floor);
+    section.style.setProperty('--chapter-floor-accent', theme.floorAccent);
+    section.style.setProperty('--chapter-wall', theme.wall);
+    section.style.setProperty('--chapter-wall-shadow', theme.wallShadow);
+    section.style.setProperty('--chapter-fg', theme.hudFg);
+    section.style.setProperty('--chapter-accent', theme.accent);
 
     const header = document.createElement('div');
     header.className = 'chapter-header';
-    header.style.setProperty('--chapter-color', theme.exit);
     header.innerHTML = `
       <div class="chapter-title-row">
         <span class="ci">第 ${ci} 章</span>
@@ -117,8 +129,14 @@ export function showLevelSelect(handlers: {
       const unlocked = storage.isUnlocked(lv.id);
       if (!unlocked) tile.classList.add('locked');
 
-      tile.style.background = theme.bg;
-      tile.style.color = theme.hudFg;
+      // 把每张 tile 渲染成"迷宫缩影"：地板色为底、墙色为边框、文字用 hudFg。
+      // 这样玩家看到关卡卡片就预感本章迷宫的色彩氛围。
+      tile.style.setProperty('--tile-bg', theme.floor);
+      tile.style.setProperty('--tile-bg-accent', theme.floorAccent);
+      tile.style.setProperty('--tile-border', theme.wall);
+      tile.style.setProperty('--tile-fg', theme.hudFg);
+      tile.style.setProperty('--tile-accent', theme.accent);
+      tile.style.setProperty('--tile-exit', theme.exit);
 
       const record = storage.getRecord(lv.id);
       const stars = record?.bestStars ?? 0;

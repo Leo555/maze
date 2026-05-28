@@ -110,36 +110,36 @@ const CHAPTERS: Chapter[] = [
     enableTime: true,
     enableMap: true,
   },
-  // 第六章：迷雾（dusk 复访）
+  // 第六章：迷雾（dusk 家族变体，暮色更深）
   {
     index: 6,
     name: '雾境',
     subtitle: 'MIST',
-    theme: 'dusk',
+    theme: 'mist',
     bgm: 'bgm_dusk',
     vision: 'medium',
     enableKeys: true,
     enableTime: true,
     enableMap: true,
   },
-  // 第七章：虹霓
+  // 第七章：虹霓（aurora 家族变体，紫渐渡桃霞）
   {
     index: 7,
     name: '虹霓',
     subtitle: 'PRISM',
-    theme: 'aurora',
+    theme: 'prism',
     bgm: 'bgm_aurora',
     vision: 'small',
     enableKeys: true,
     enableTime: true,
     enableMap: true,
   },
-  // 第八章：深渊（deep 复访）
+  // 第八章：深渊（deep 家族变体，向青墨偏移）
   {
     index: 8,
     name: '深渊',
     subtitle: 'ABYSS',
-    theme: 'deep',
+    theme: 'abyss',
     bgm: 'bgm_deep',
     vision: 'small',
     enableKeys: true,
@@ -158,12 +158,12 @@ const CHAPTERS: Chapter[] = [
     enableTime: true,
     enableMap: true,
   },
-  // 终章：终局
+  // 终章：终局（finale 家族变体，加金色辉光）
   {
     index: 10,
     name: '终局',
     subtitle: 'FINALE',
-    theme: 'finale',
+    theme: 'epilogue',
     bgm: 'bgm_finale',
     vision: 'small',
     enableKeys: true,

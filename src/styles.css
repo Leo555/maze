@@ -522,9 +522,11 @@ body {
   cursor: not-allowed;
 }
 
+/* 激活态：用章节专属色做柔和高亮，而非固定橙色，与下方 section 主题呼应 */
 .chapter-nav-item.active {
-  background: var(--accent-soft);
-  border-color: rgba(232, 168, 124, 0.5);
+  background: var(--chapter-bg, var(--accent-soft));
+  border-color: var(--chapter-color, rgba(232, 168, 124, 0.5));
+  box-shadow: 0 0 0 1px var(--chapter-color, transparent) inset;
 }
 
 .chapter-nav-item .ci {
@@ -561,8 +563,18 @@ body {
 
 .chapter-section {
   margin-bottom: 22px;
-  padding: 12px 4px 4px;
-  border-radius: 12px;
+  padding: 14px 12px 10px;
+  border-radius: 14px;
+  /* 章节卡片用本章主题 bg 做轻染色，让玩家"翻到这一章"就预感本章氛围；
+     用半透明确保整体页面仍保持统一的米白底 */
+  background: color-mix(in srgb, var(--chapter-bg, transparent) 40%, transparent);
+  border: 1px solid color-mix(in srgb, var(--chapter-wall, var(--border)) 25%, transparent);
+  transition: background 0.3s ease;
+}
+
+.chapter-section.locked {
+  /* 锁定态：去饱和而不是降透明度，保留主题色调暗示，但视觉退场 */
+  filter: grayscale(0.55) brightness(0.96);
 }
 
 .chapter-section.locked .level-grid {
@@ -571,9 +583,8 @@ body {
 
 .chapter-header {
   margin-bottom: 12px;
-  padding: 0 4px;
+  padding: 0 4px 0 12px;
   border-left: 3px solid var(--chapter-color, var(--accent));
-  padding-left: 12px;
 }
 
 .chapter-title-row {
@@ -627,12 +638,21 @@ body {
   justify-content: center;
   gap: 2px;
   cursor: pointer;
-  transition: transform 0.15s;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: transform 0.15s, box-shadow 0.2s;
+  /* 把 tile 渲染成本章迷宫的"缩影"：地板色为底，墙色描边 */
+  background: var(--tile-bg, var(--card));
+  color: var(--tile-fg, var(--text));
+  border: 1px solid color-mix(in srgb, var(--tile-border, var(--border)) 45%, transparent);
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--tile-bg-accent, transparent) 60%, transparent);
 }
 
 .level-tile:hover:not(.locked) {
   transform: translateY(-3px);
+  /* 悬浮时墙色边框增强，模拟玩家"靠近这一关" */
+  border-color: var(--tile-border, var(--accent));
+  box-shadow:
+    inset 0 -2px 0 color-mix(in srgb, var(--tile-bg-accent, transparent) 80%, transparent),
+    0 6px 16px color-mix(in srgb, var(--tile-border, transparent) 25%, transparent);
 }
 
 .level-tile.locked {
@@ -644,19 +664,22 @@ body {
   font-size: 17px;
   font-weight: 400;
   font-variant-numeric: tabular-nums;
+  color: var(--tile-fg, var(--text));
 }
 
 .level-tile .name {
   font-size: 9px;
   letter-spacing: 1px;
   opacity: 0.72;
+  color: var(--tile-fg, var(--text-soft));
 }
 
 .level-tile .stars {
   font-size: 10px;
   letter-spacing: 2px;
   margin-top: 2px;
-  color: #d97706;
+  /* 星星颜色用本章 exit 色（出口色），与游戏内三星动效一致 */
+  color: var(--tile-exit, #d97706);
 }
 
 /* 通关结算 */

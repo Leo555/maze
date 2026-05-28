@@ -408,9 +408,11 @@ export class Game {
         this.hud.showToast('+10s', 900);
         break;
       case 'map_shard':
-        this.renderer.triggerReveal(3);
+        // 拾取「晨雾灯」：晨雾彻底散开 6 秒，揭示完整迷宫布局
+        // 6s 给玩家充足时间俯瞰全图、规划路径，呼应游戏名"晨雾迷径"的诗意
+        this.renderer.triggerReveal(6);
         audio.playSfx('pickup_map');
-        this.hud.showToast('地图揭示 3 秒', 1200);
+        this.hud.showToast('晨雾散开 6 秒', 1500);
         break;
       default:
         break;

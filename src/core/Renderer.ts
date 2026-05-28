@@ -49,7 +49,10 @@ export class Renderer {
   // resize 节流（rAF）
   private resizePending = false;
 
-  // 完整地图揭示倒计时（地图碎片效果）
+  // 完整地图揭示倒计时（晨雾灯效果）
+  // revealStart：本次揭示开始时间（用于散开动画）
+  // revealUntil：揭示彻底结束时间（用于聚拢动画与判定是否揭示中）
+  revealStart = 0;
   revealUntil = 0;
 
   // 关卡完成动画（0=正常，>0 表示渐隐进度）
@@ -114,6 +117,7 @@ export class Renderer {
     this.visited[maze.start.y][maze.start.x] = true;
     this.fadeIn = 1;
     this.fadeOut = 0;
+    this.revealStart = 0;
     this.revealUntil = 0;
     this.bestPath = null;
     this.playerPath = null;
@@ -130,7 +134,14 @@ export class Renderer {
   }
 
   triggerReveal(seconds: number): void {
-    this.revealUntil = Math.max(this.revealUntil, performance.now() / 1000 + seconds);
+    const now = performance.now() / 1000;
+    // 仅在本次拾取真的延长时间时才重置 start，避免连续拾取每次都从头淡出
+    const newUntil = Math.max(this.revealUntil, now + seconds);
+    if (this.revealUntil <= now) {
+      // 上次揭示已结束，本次是全新一次拾取 → 重置 start 触发开头淡出
+      this.revealStart = now;
+    }
+    this.revealUntil = newUntil;
   }
 
   triggerFadeOut(): void {
@@ -616,21 +627,54 @@ export class Renderer {
   ): void {
     const radius = VISION_RADIUS[config.vision];
     if (radius >= 100) return;
-    const revealing = performance.now() / 1000 < this.revealUntil;
-    if (revealing) return;
+
+    // 「晨雾灯」效果：在 reveal 期间整体淡化雾，并在头尾各 FADE 秒做平滑过渡，
+    // 营造"雾散开 → 看清布局 → 雾重新聚拢"的诗意呼吸感，而非生硬的开关。
+    const now = performance.now() / 1000;
+    let fogIntensity = 1; // 1 = 完全显雾；0 = 雾完全散开
+    if (now < this.revealUntil) {
+      const FADE = 0.6; // 散开/聚拢的过渡时长（秒）
+      const sinceStart = now - this.revealStart;
+      const untilEnd = this.revealUntil - now;
+      // 开头 FADE 秒：1 → 0（雾散开）
+      // 中间稳定阶段：0（完全无雾）
+      // 结尾 FADE 秒：0 → 1（雾聚拢）
+      // 取两端淡化值的较大者，自然处理"短揭示（< 2*FADE）头尾交叠"的边界情况
+      const fadeOutFromStart = sinceStart < FADE ? 1 - sinceStart / FADE : 0;
+      const fadeInToEnd = untilEnd < FADE ? 1 - untilEnd / FADE : 0;
+      fogIntensity = Math.max(fadeOutFromStart, fadeInToEnd);
+    }
+    if (fogIntensity <= 0.001) return;
 
     const cs = layout.cellSize;
     const cx = layout.offsetX + (player.state.px + 0.5) * cs;
     const cy = layout.offsetY + (player.state.py + 0.5) * cs;
     const r = radius * cs;
 
+    // 把 theme.fog 的 alpha 乘以 fogIntensity，实现整体淡入淡出
+    const fadedFog = this.scaleFogAlpha(theme.fog, fogIntensity);
+    const fadedFogMid = this.scaleFogAlpha(theme.fog, fogIntensity * 0.36);
+
     const grad = ctx.createRadialGradient(cx, cy, r * 0.3, cx, cy, r);
     grad.addColorStop(0, 'rgba(0,0,0,0)');
-    grad.addColorStop(0.7, this.hexToRgba(theme.fog.replace(/[\d.]+\)/, '0.2)'), 0.2));
-    grad.addColorStop(1, theme.fog);
+    grad.addColorStop(0.7, fadedFogMid);
+    grad.addColorStop(1, fadedFog);
 
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, this.cssWidth, this.cssHeight);
+  }
+
+  /** 把 rgba(r,g,b,a) 字符串里的 alpha 乘以 mul，返回新的 rgba 字符串 */
+  private scaleFogAlpha(rgba: string, mul: number): string {
+    // 形如 rgba(60, 75, 100, 0.22) → 提取数字 + 替换 alpha
+    const m = rgba.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+))?\s*\)/i);
+    if (!m) return rgba;
+    const r = m[1];
+    const g = m[2];
+    const b = m[3];
+    const a = m[4] !== undefined ? parseFloat(m[4]) : 1;
+    const finalA = Math.max(0, Math.min(1, a * mul));
+    return `rgba(${r}, ${g}, ${b}, ${finalA.toFixed(3)})`;
   }
 
   /**
