@@ -156,12 +156,26 @@ export class Storage {
   /** 监听器：进度变更时调用（用于 UI 自动刷新） */
   private listeners = new Set<() => void>();
 
+  /**
+   * 云端 bootstrap 完成的 Promise。
+   *
+   * - 入口（main.ts）会 await 这个 Promise（带超时），
+   *   保证主菜单首屏就基于云端最新进度渲染，避免「先显示老进度后跳变」。
+   * - 失败 / 无 cookie / 网络异常 → 仍然 resolve（不 reject），
+   *   不阻塞用户使用本地存档。
+   */
+  private bootstrapResolve: (() => void) | null = null;
+  readonly bootstrapPromise: Promise<void>;
+
   constructor() {
     this.data = this.load();
     this.linkedCode = this.loadLinkedCode();
     // 启动时同步两边：哪边缺就用另一边补回来（应对 ITP 单边清理）
     this.flushLocal();
-    // 启动时异步拉云端进度（如果 cookie 已绑定），完成后合并并通知监听器
+    // 启动时异步拉云端进度（如果 cookie 已绑定），完成后通知监听器并 resolve bootstrap
+    this.bootstrapPromise = new Promise<void>((resolve) => {
+      this.bootstrapResolve = resolve;
+    });
     void this.bootstrapCloud();
   }
 
@@ -197,24 +211,31 @@ export class Storage {
    *     上一次离线通关一旦联网就会推上去。
    */
   private async bootstrapCloud(): Promise<void> {
-    const me = await cloud.fetchMine();
-    if (!me) return;
-    this.cloudCode = me.code;
-    // linkedCode 兜底：本机首次启动时用云端 code 填上，已经有值则保留用户视角
-    if (!this.linkedCode) {
-      this.linkedCode = me.code;
-      this.saveLinkedCode(me.code);
-    }
-    const remote = normalizeSave(me.progress);
-    if (remote) {
-      const same = JSON.stringify(remote) === JSON.stringify(this.data);
-      if (!same) {
-        this.data = remote;
-        this.flushLocal();
-        this.notifyChange();
+    try {
+      const me = await cloud.fetchMine();
+      if (!me) return;
+      this.cloudCode = me.code;
+      // linkedCode 兜底：本机首次启动时用云端 code 填上，已经有值则保留用户视角
+      if (!this.linkedCode) {
+        this.linkedCode = me.code;
+        this.saveLinkedCode(me.code);
       }
+      const remote = normalizeSave(me.progress);
+      if (remote) {
+        const same = JSON.stringify(remote) === JSON.stringify(this.data);
+        if (!same) {
+          this.data = remote;
+          this.flushLocal();
+          this.notifyChange();
+        }
+      }
+      this.notifyChange();
+    } finally {
+      // 不论成功或失败，标记 bootstrap 已完成。
+      // 调用方（main.ts）依赖这个 Promise 决定何时启动 Game。
+      this.bootstrapResolve?.();
+      this.bootstrapResolve = null;
     }
-    this.notifyChange();
   }
 
   /**

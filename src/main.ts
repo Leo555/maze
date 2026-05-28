@@ -1,9 +1,12 @@
 /**
  * 应用入口
  *
- * 启动顺序（按性能优先级排序）：
- *   1. 立即创建 Game（首屏关键路径）
- *   2. 在浏览器空闲时再注入 Vercel Analytics（非关键，不阻塞首屏）
+ * 启动顺序：
+ *   1. 解析 URL（?recover= / ?wx=）：扫码恢复链接需要在 Game 初始化前完成 adopt，
+ *      否则主菜单会先渲染本地老进度再跳变到云端进度
+ *   2. 等待 Storage bootstrap（拉云端最新进度），最多 1.5s 超时兜底
+ *   3. new Game()：基于已经被刷新的本地 storage 渲染主菜单
+ *   4. 浏览器空闲时再注入 Vercel Analytics（非关键，不阻塞首屏）
  */
 
 import './styles.css';
@@ -78,71 +81,101 @@ document.addEventListener(
   { passive: false }
 );
 
-new Game();
-
-// 第 2 次以上访问的 iOS Safari 用户，提示「添加到主屏」
-// 加到主屏后 localStorage 不再受 ITP 7 天清理影响，进度持久化大幅提升
-maybeShowAddToHomeScreen();
-
-// === 微信内首次访问 → 触发授权（已废弃 v2 不再自动跳）===
+// === 入口：先把"账号 + 云端进度"拿到位，再启动 Game ===
 //
-// v1 设计：在微信内强制授权拿 openid 才能创建账号。
-// v2 重构后：任何端首次通关都会自动 init 创建匿名账号，
-//             微信授权变成「可选的跨设备找回」入口（设置页手动点）。
-// 因此这里不再自动 redirect，让微信内体验与普通浏览器一致。
+// 关键体验问题：如果直接 new Game()，主菜单会先按 localStorage 中的本地进度渲染，
+// 等 Storage 异步拉到云端最新进度后再跳变。这一闪一变非常糟糕，
+// 尤其是用户在另一台设备刚通了几关、回到本机时编号/已通关数等都会经历视觉跳变。
 //
-// 保留 ?wx=ok / ?wx=fail 回调处理，兼容历史授权回调链接（老用户书签/二维码）。
-
+// 因此入口改为异步：
+//   1. 处理 ?recover= 扫码 adopt（拿到目标账号的 token cookie + 进度）
+//   2. 等待 storage.bootstrapPromise（拉自身 cookie 对应的云端进度）
+//   3. 给个 1.5s 超时：网络慢/挂时不卡用户，先用本地启动；
+//      云端晚到的进度会通过 storage.onChange 让 UI 自然刷新
+//   4. new Game()
 const params = new URLSearchParams(location.search);
-const justReturned = params.get('wx') === 'ok' || params.get('wx') === 'fail';
+const wxStatus = params.get('wx');
+const justReturned = wxStatus === 'ok' || wxStatus === 'fail';
+const recoverCode = params.get('recover');
 
-// 处理回调返回的 ?wx=ok&code=xxx：提示用户编号，并清理 URL
-if (justReturned) {
-  const wxStatus = params.get('wx');
-  if (wxStatus === 'ok') {
-    const code = params.get('code') || '';
-    if (code) {
-      // 延迟到 Game 启动完后再展示，避免与启动动画重叠
+/** 给 Promise 加超时兜底；超时不抛错只 resolve，让启动继续 */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | undefined> {
+  return new Promise<T | undefined>((resolve) => {
+    let done = false;
+    const timer = setTimeout(() => {
+      if (done) return;
+      done = true;
+      resolve(undefined);
+    }, ms);
+    p.then((v) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      resolve(v);
+    }).catch(() => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      resolve(undefined);
+    });
+  });
+}
+
+async function bootstrap(): Promise<void> {
+  // === 1. 扫码 / 链接恢复：?recover=xxxxxxxx ===
+  // 必须在 Game 初始化前完成，否则主菜单会先渲染本机原账号进度再跳变到目标账号进度
+  if (recoverCode && /^\d{8}$/.test(recoverCode)) {
+    // 立刻清掉 URL 参数，避免用户截图分享时把编号泄露
+    // （编号本身只能读不能写，泄露危险性低，但仍是用户隐私）
+    const cleanUrl = location.pathname + location.hash;
+    history.replaceState(null, '', cleanUrl);
+
+    // adopt 设置带短超时（1.2s）：失败/慢网络下不阻塞启动，由 toast 反馈
+    const me = await withTimeout(adoptAccount(recoverCode), 1200);
+    if (me) {
+      storage.adoptRemoteAccount(me.code, me.progress);
+      // 启动后再 toast，避免被 Game 的入场动效压住
       setTimeout(() => {
-        // 用全局 toast 取代原本的 alert（阻塞 + 丑），并把停留时间拉长到 5 秒
-        // 让用户来得及看清编号；与 Hud 内部 toast 互不干扰
-        showToast(
-          `同步成功！你的进度编号：${code}\n请截图保存，在其他设备输入即可恢复进度`,
-          'success',
-          5000
-        );
-      }, 800);
+        showToast(`已切换到编号 ${me.code} 的进度`, 'success', 2800);
+      }, 600);
+    } else {
+      setTimeout(() => {
+        showToast('编号不存在或操作过于频繁', 'error', 2400);
+      }, 600);
     }
   }
-  // 清理 URL，避免分享时泄露 code
-  history.replaceState(null, '', location.pathname + location.hash);
-}
 
-// === 处理 ?recover=xxxxxxxx：扫码 / 链接恢复进度 ===
-// 用户在另一台设备扫了同步面板的二维码，URL 形如：
-//   https://maze.lz5z.com/?recover=14815162
-// 行为：调用 /api/account/adopt 把该编号对应账号"领取"到本机：
-//   - 后端轮换 token，原设备 cookie 失效（避免两端互相覆盖云端）
-//   - 本机的 maze_auth cookie 切到新账号
-//   - 本地存档直接替换为该账号的云端进度
-const recoverCode = params.get('recover');
-if (recoverCode && /^\d{8}$/.test(recoverCode)) {
-  // 立刻清掉 URL 参数，避免用户截图分享时把编号泄露
-  // （编号本身只能读不能写，泄露危险性低，但仍是用户隐私）
-  const cleanUrl = location.pathname + location.hash;
-  history.replaceState(null, '', cleanUrl);
+  // === 2. 等云端进度 bootstrap 完成（已带本机 cookie 的拉取）===
+  // 1.5s 兜底：网络慢/挂时不卡用户，云端晚到时通过 storage.onChange 让 UI 自然刷新
+  await withTimeout(storage.bootstrapPromise, 1500);
 
-  // 异步执行：不阻塞游戏启动，结果由 toast 反馈
-  void (async () => {
-    const me = await adoptAccount(recoverCode);
-    if (!me) {
-      showToast('该编号不存在或操作过于频繁', 'error', 2400);
-      return;
+  // === 3. 启动 Game ===
+  new Game();
+
+  // 第 2 次以上访问的 iOS Safari 用户，提示「添加到主屏」
+  // 加到主屏后 localStorage 不再受 ITP 7 天清理影响，进度持久化大幅提升
+  maybeShowAddToHomeScreen();
+
+  // === 4. 微信回调 ?wx=ok&code=xxx：toast 提示编号 ===
+  if (justReturned) {
+    if (wxStatus === 'ok') {
+      const code = params.get('code') || '';
+      if (code) {
+        setTimeout(() => {
+          showToast(
+            `同步成功！你的进度编号：${code}\n请截图保存，在其他设备输入即可恢复进度`,
+            'success',
+            5000
+          );
+        }, 800);
+      }
     }
-    storage.adoptRemoteAccount(me.code, me.progress);
-    showToast(`已切换到编号 ${me.code} 的进度`, 'success', 2800);
-  })();
+    // 清理 URL，避免分享时泄露 code
+    history.replaceState(null, '', location.pathname + location.hash);
+  }
 }
+
+void bootstrap();
 
 // === Vercel Web Analytics（延迟注入，避免阻塞首屏渲染）===
 // inject() 内部会同步加载 va.vercel-scripts.com 的 script.js（~3KB）
