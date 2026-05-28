@@ -1,28 +1,38 @@
 /**
  * POST /api/save
  *
- * 凭 maze_auth cookie 上行进度。
+ * 保存进度。
+ *   入参：{ code: '12345678', progress: SaveData }
+ *   返回：{ progress }（写入后的最终值）
  *
- * 写入语义（last-write-wins）：
- *   - 直接用客户端上行的进度覆盖云端，不做合并仲裁
- *   - 多设备共享同一账号时：手机/电脑谁后通关，云端就是谁的版本
- *   - 其他设备下次启动 bootstrap 时会用云端版本覆盖本地，从而看到最新进度
+ * 鉴权：无（持有 code = 持有写权限）
  *
- * 取舍：
- *   - 优点：多端切换体验一致、行为可预期
- *   - 代价：两端"几乎同时通关"的边界场景下，后写者会覆盖先写者新增的关，
- *     这是单账号多设备共享设计下用户接受的语义。
+ * 反作弊：上行进度相对云端 unlocked 增量不超过 5。
+ *   如客户端 unlocked 比云端高 6 关以上 → 拒绝（防止本地改成全通关后强推）。
+ *
+ * 限流：同 IP+code 每 60s 最多 30 次。
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { readAuthCookie, json, checkOrigin } from './_lib/http.js';
-import { getUserByToken, updateUserProgress } from './_lib/kv.js';
+import { json, checkOrigin, getClientIp } from './_lib/http.js';
+import { getProgress, setProgress } from './_lib/kv.js';
 import { normalizeSave } from '../shared/types.js';
+import { kv } from '@vercel/kv';
 
-function safeJsonParse(s: string): { progress?: unknown } | null {
+const RATE_LIMIT_WINDOW_SEC = 60;
+const RATE_LIMIT_MAX = 30;
+const MAX_UNLOCK_DELTA = 5;
+
+async function isRateLimited(ip: string, code: string): Promise<boolean> {
+  const key = `rl:save:${ip}:${code}`;
+  const n = await kv.incr(key);
+  if (n === 1) void kv.expire(key, RATE_LIMIT_WINDOW_SEC);
+  return n > RATE_LIMIT_MAX;
+}
+
+function safeJsonParse(s: string): unknown {
   try {
-    const parsed = JSON.parse(s);
-    return parsed && typeof parsed === 'object' ? parsed : null;
+    return JSON.parse(s);
   } catch {
     return null;
   }
@@ -41,37 +51,34 @@ export default async function handler(
     return;
   }
 
-  const auth = readAuthCookie(req);
-  if (!auth) {
-    json(res, 401, { error: 'unauthenticated' });
+  // 解析 body
+  const raw = typeof req.body === 'string' ? safeJsonParse(req.body) : req.body;
+  const body = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null;
+  const code = String(body?.code || '').trim();
+  if (!/^\d{8}$/.test(code)) {
+    json(res, 400, { error: 'bad_code' });
     return;
   }
-  const user = await getUserByToken(auth.userId, auth.token);
-  if (!user) {
-    json(res, 401, { error: 'unauthenticated' });
-    return;
-  }
-
-  // 解析 body：兼容 string 或 object
-  let body: { progress?: unknown } | null;
-  if (typeof req.body === 'string') {
-    body = safeJsonParse(req.body);
-  } else if (req.body && typeof req.body === 'object') {
-    body = req.body as { progress?: unknown };
-  } else {
-    body = null;
-  }
-  const incoming = body ? normalizeSave(body.progress) : null;
+  const incoming = normalizeSave(body?.progress);
   if (!incoming) {
-    json(res, 400, { error: 'bad_request' });
+    json(res, 400, { error: 'bad_progress' });
     return;
   }
 
-  // last-write-wins：直接用客户端进度覆盖云端
-  const next = await updateUserProgress(user.userId, incoming);
-  if (!next) {
-    json(res, 500, { error: 'update_failed' });
+  // 限流
+  const ip = getClientIp(req);
+  if (await isRateLimited(ip, code)) {
+    json(res, 429, { error: 'too_many_requests' });
     return;
   }
-  json(res, 200, { code: next.code, progress: next.progress });
+
+  // 反作弊：相比云端 unlocked 增量不能超过 5
+  const current = await getProgress(code);
+  if (current && incoming.unlocked > current.unlocked + MAX_UNLOCK_DELTA) {
+    json(res, 400, { error: 'unlock_delta_too_large' });
+    return;
+  }
+
+  await setProgress(code, incoming);
+  json(res, 200, { progress: incoming });
 }

@@ -7,7 +7,6 @@
 
 import { audio } from '../core/Audio';
 import { storage } from '../core/Storage';
-import { adoptAccount } from '../core/CloudSync';
 import { showToast } from './Toast';
 import {
   levels,
@@ -717,16 +716,8 @@ export function showSettings(onBack: () => void): void {
 
 // ==================== 同步进度面板（嵌入设置页） ====================
 /**
- * 构造「同步进度」面板，加在设置页里。
- *
- * 两个状态维度：
- *   - linkedCode：用户已知的编号（含输入恢复后保存）
- *   - cloudCode：本机可写云端的身份（首次通关后自动 init）
- *
- * 状态决策：
- *   1. linkedCode + cloudCode → 已注册账号（编号 + 二维码 + 退出当前账号）
- *   2. linkedCode + 没 cloudCode → 只读恢复模式（输入了别人的编号）
- *   3. 都没有 → 还没玩过 / 未通关（引导通关后自动生成编号）
+ * 极简版：只有一个 code（首次访问就生成、存 localStorage），
+ * UI 永远是单一状态——展示编号 + 复制 / 二维码 / 输入新编号绑定。
  */
 function buildSyncPanel(): HTMLElement {
   const wrap = document.createElement('div');
@@ -734,134 +725,64 @@ function buildSyncPanel(): HTMLElement {
 
   const render = (): void => {
     wrap.innerHTML = '';
-    const linkedCode = storage.getLinkedCode();
-    const cloudCode = storage.getCloudCode();
+    const code = storage.getCode();
 
-    // 标题行
     const title = document.createElement('div');
     title.className = 'sync-title';
     title.textContent = '同步进度';
     wrap.appendChild(title);
 
-    if (linkedCode && cloudCode) {
-      // === 状态 1：已注册账号（本机能写云端）===
-      const codeRow = document.createElement('div');
-      codeRow.className = 'sync-code-row';
-      codeRow.innerHTML = `
-        <div class="sync-code-label">我的同步编号</div>
-        <div class="sync-code-value">${linkedCode}</div>
-      `;
-      wrap.appendChild(codeRow);
+    const codeRow = document.createElement('div');
+    codeRow.className = 'sync-code-row';
+    codeRow.innerHTML = `
+      <div class="sync-code-label">我的同步编号</div>
+      <div class="sync-code-value">${code}</div>
+    `;
+    wrap.appendChild(codeRow);
 
-      const tip = document.createElement('div');
-      tip.className = 'sync-tip';
-      tip.textContent = '通关进度自动同步到云端；其他设备输入此编号或扫码即可绑定到同一账号';
-      wrap.appendChild(tip);
+    const tip = document.createElement('div');
+    tip.className = 'sync-tip';
+    tip.textContent = '通关进度自动同步到云端；其他设备输入此编号或扫码即可同步';
+    wrap.appendChild(tip);
 
-      const btnRow = document.createElement('div');
-      btnRow.className = 'sync-btn-row';
+    const btnRow = document.createElement('div');
+    btnRow.className = 'sync-btn-row';
 
-      const copyBtn = document.createElement('button');
-      copyBtn.className = 'btn';
-      copyBtn.textContent = '复 制 编 号';
-      attachClickSfx(copyBtn);
-      copyBtn.onclick = async () => {
-        try {
-          await navigator.clipboard.writeText(linkedCode);
-          copyBtn.textContent = '已 复 制 ✓';
-          setTimeout(() => (copyBtn.textContent = '复 制 编 号'), 1500);
-        } catch {
-          showToast(`你的同步编号：${linkedCode}\n请手动长按复制`, 'info', 4000);
-        }
-      };
-      btnRow.appendChild(copyBtn);
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'btn';
+    copyBtn.textContent = '复 制 编 号';
+    attachClickSfx(copyBtn);
+    copyBtn.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(code);
+        copyBtn.textContent = '已 复 制 ✓';
+        setTimeout(() => (copyBtn.textContent = '复 制 编 号'), 1500);
+      } catch {
+        showToast(`你的同步编号：${code}\n请手动长按复制`, 'info', 4000);
+      }
+    };
+    btnRow.appendChild(copyBtn);
 
-      const inputBtn = document.createElement('button');
-      inputBtn.className = 'btn';
-      inputBtn.textContent = '绑 定 其 他 编 号';
-      attachClickSfx(inputBtn);
-      inputBtn.onclick = () => promptCodeAndPull(render);
-      btnRow.appendChild(inputBtn);
+    const inputBtn = document.createElement('button');
+    inputBtn.className = 'btn';
+    inputBtn.textContent = '输 入 其 他 编 号';
+    attachClickSfx(inputBtn);
+    inputBtn.onclick = () => promptAdoptCode(render);
+    btnRow.appendChild(inputBtn);
 
-      wrap.appendChild(btnRow);
+    wrap.appendChild(btnRow);
 
-      // 二维码按钮（独占一行）
-      const qrBtn = document.createElement('button');
-      qrBtn.className = 'btn sync-qr';
-      qrBtn.textContent = '生 成 同 步 二 维 码';
-      attachClickSfx(qrBtn);
-      qrBtn.onclick = () => showQrDialog(linkedCode);
-      wrap.appendChild(qrBtn);
-
-      const unlinkBtn = document.createElement('button');
-      unlinkBtn.className = 'btn sync-unlink';
-      unlinkBtn.textContent = '退 出 当 前 账 号';
-      attachClickSfx(unlinkBtn);
-      unlinkBtn.onclick = async () => {
-        const confirmMsg =
-          '退出后，本机将不再自动同步到云端（云端数据保留 1 年）。下次输入编号可再次找回。是否继续？';
-        if (!confirm(confirmMsg)) return;
-        try {
-          await fetch('/api/account/logout', { credentials: 'include' });
-        } catch {
-          /* ignore */
-        }
-        storage.unlinkCode();
-      };
-      wrap.appendChild(unlinkBtn);
-    } else if (linkedCode) {
-      // === 状态 2：只读恢复模式（用户输了别人的编号但没自己的账号）===
-      const codeRow = document.createElement('div');
-      codeRow.className = 'sync-code-row';
-      codeRow.innerHTML = `
-        <div class="sync-code-label">已恢复编号（只读）</div>
-        <div class="sync-code-value">${linkedCode}</div>
-      `;
-      wrap.appendChild(codeRow);
-
-      const tip = document.createElement('div');
-      tip.className = 'sync-tip';
-      tip.textContent = '本机进度不会上传到此编号；通关 1 关后会自动生成你自己的编号';
-      wrap.appendChild(tip);
-
-      const inputBtn = document.createElement('button');
-      inputBtn.className = 'btn primary';
-      inputBtn.textContent = '绑 定 其 他 编 号';
-      inputBtn.style.width = '100%';
-      attachClickSfx(inputBtn);
-      inputBtn.onclick = () => promptCodeAndPull(render);
-      wrap.appendChild(inputBtn);
-
-      const clearBtn = document.createElement('button');
-      clearBtn.className = 'btn sync-unlink';
-      clearBtn.textContent = '清 除 已 恢 复 编 号';
-      attachClickSfx(clearBtn);
-      clearBtn.onclick = () => {
-        if (!confirm('清除当前编号？本机进度仍保留。')) return;
-        storage.unlinkCode();
-      };
-      wrap.appendChild(clearBtn);
-    } else {
-      // === 状态 3：还没账号 ===
-      const tip = document.createElement('div');
-      tip.className = 'sync-tip';
-      tip.textContent = '通关第 1 关后会自动生成你的同步编号；或输入已有编号恢复进度';
-      wrap.appendChild(tip);
-
-      const recoverBtn = document.createElement('button');
-      recoverBtn.className = 'btn primary';
-      recoverBtn.textContent = '绑 定 已 有 编 号';
-      recoverBtn.style.width = '100%';
-      attachClickSfx(recoverBtn);
-      recoverBtn.onclick = () => promptCodeAndPull(render);
-      wrap.appendChild(recoverBtn);
-    }
+    const qrBtn = document.createElement('button');
+    qrBtn.className = 'btn sync-qr';
+    qrBtn.textContent = '生 成 同 步 二 维 码';
+    attachClickSfx(qrBtn);
+    qrBtn.onclick = () => showQrDialog(code);
+    wrap.appendChild(qrBtn);
   };
 
   render();
-  // 订阅 storage 变更：拉取/合并完成后自动刷新面板
+  // storage 变更（启动 bootstrap 拉到云端 / 切换 code 后）自动刷新面板
   const unsub = storage.onChange(render);
-  // 当面板从 DOM 卸载时取消订阅，避免内存泄漏
   const observer = new MutationObserver(() => {
     if (!document.body.contains(wrap)) {
       unsub();
@@ -873,14 +794,8 @@ function buildSyncPanel(): HTMLElement {
   return wrap;
 }
 
-/**
- * 弹窗输入编号 → 把对应账号绑定到本机（adopt 语义）
- *   - 后端把该账号当前 token 通过 cookie 下发给本机
- *   - 本地存档直接替换为该账号云端版本
- *   - 后续通关写云端就是写到这个账号上，多端共享
- */
-async function promptCodeAndPull(refresh: () => void): Promise<void> {
-  // prompt 仍保留：toast 是单向提示，不能输入；输入仍需 prompt 阻塞调用
+/** 弹窗输入编号 → 切换本机 code（同时拉取云端进度覆盖本地） */
+async function promptAdoptCode(refresh: () => void): Promise<void> {
   const code = prompt('请输入 8 位同步编号：');
   if (!code) return;
   const trimmed = code.trim();
@@ -888,13 +803,12 @@ async function promptCodeAndPull(refresh: () => void): Promise<void> {
     showToast('编号格式错误，必须是 8 位数字', 'error');
     return;
   }
-  const me = await adoptAccount(trimmed);
-  if (!me) {
+  const ok = await storage.adoptCode(trimmed);
+  if (!ok) {
     showToast('未找到该编号或操作过于频繁', 'error', 2400);
     return;
   }
-  storage.adoptRemoteAccount(me.code, me.progress);
-  showToast(`已切换到编号 ${me.code} 的进度`, 'success', 2400);
+  showToast(`已切换到编号 ${trimmed} 的进度`, 'success', 2400);
   refresh();
 }
 
