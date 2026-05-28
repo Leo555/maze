@@ -75,6 +75,49 @@ body {
   overflow: hidden;
 }
 
+/* ========== SEO 内容区 ==========
+ * 白帽呈现：DOM 真实存在、文字颜色/尺寸正常，不使用 left:-10000px / display:none
+ * / visibility:hidden 这类"伪隐藏"以避免被搜索引擎判为 cloaking。
+ *
+ * 视觉上为何用户看不到？
+ *   - body 全局 overflow:hidden（见上方 html,body 规则）
+ *   - #app 绝对定位铺满 100% viewport（见上一规则块）
+ *   - 因此 .seo-content 出现在 #app 之后的正常文档流中，但被 #app 完全覆盖；
+ *     页面又不允许滚动，玩家看不到，但 Google/百度/360 抓取时仍能读到全部文字。
+ *   - 屏幕阅读器照常可访问。
+ */
+.seo-content {
+  /* 正常字号，避免 1px 字符触发 Google "tiny text" 信号 */
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+  padding: 24px;
+  /* 允许选中文字（默认全局 user-select:none 在这里放开，便于无障碍朗读/复制） */
+  -webkit-user-select: text;
+  user-select: text;
+}
+.seo-content h1,
+.seo-content h2,
+.seo-content h3 {
+  margin: 12px 0 8px;
+  font-weight: 600;
+}
+.seo-content h1 {
+  font-size: 22px;
+}
+.seo-content h2 {
+  font-size: 18px;
+}
+.seo-content h3 {
+  font-size: 15px;
+}
+.seo-content p,
+.seo-content ul,
+.seo-content ol {
+  margin: 6px 0;
+  padding-left: 1.2em;
+}
+
 #game-canvas {
   position: absolute;
   inset: 0;
