@@ -7,7 +7,7 @@
 
 import { audio } from '../core/Audio';
 import { storage } from '../core/Storage';
-import { pullByCode, pushImmediate } from '../core/CloudSync';
+import { adoptAccount } from '../core/CloudSync';
 import { showToast } from './Toast';
 import {
   levels,
@@ -735,7 +735,7 @@ function buildSyncPanel(): HTMLElement {
 
       const tip = document.createElement('div');
       tip.className = 'sync-tip';
-      tip.textContent = '通关进度自动同步到云端；其他设备输入此编号或扫码即可恢复';
+      tip.textContent = '通关进度自动同步到云端；其他设备输入此编号或扫码即可绑定到同一账号';
       wrap.appendChild(tip);
 
       const btnRow = document.createElement('div');
@@ -758,7 +758,7 @@ function buildSyncPanel(): HTMLElement {
 
       const inputBtn = document.createElement('button');
       inputBtn.className = 'btn';
-      inputBtn.textContent = '输入其他编号';
+      inputBtn.textContent = '绑 定 其 他 编 号';
       attachClickSfx(inputBtn);
       inputBtn.onclick = () => promptCodeAndPull(render);
       btnRow.appendChild(inputBtn);
@@ -806,7 +806,7 @@ function buildSyncPanel(): HTMLElement {
 
       const inputBtn = document.createElement('button');
       inputBtn.className = 'btn primary';
-      inputBtn.textContent = '输 入 其 他 编 号';
+      inputBtn.textContent = '绑 定 其 他 编 号';
       inputBtn.style.width = '100%';
       attachClickSfx(inputBtn);
       inputBtn.onclick = () => promptCodeAndPull(render);
@@ -830,7 +830,7 @@ function buildSyncPanel(): HTMLElement {
 
       const recoverBtn = document.createElement('button');
       recoverBtn.className = 'btn primary';
-      recoverBtn.textContent = '输 入 编 号 恢 复 进 度';
+      recoverBtn.textContent = '绑 定 已 有 编 号';
       recoverBtn.style.width = '100%';
       attachClickSfx(recoverBtn);
       recoverBtn.onclick = () => promptCodeAndPull(render);
@@ -853,7 +853,12 @@ function buildSyncPanel(): HTMLElement {
   return wrap;
 }
 
-/** 弹窗输入编号 → 拉取进度 → 合并到本地 + 持久化编号 */
+/**
+ * 弹窗输入编号 → 把对应账号绑定到本机（adopt 语义）
+ *   - 后端把该账号当前 token 通过 cookie 下发给本机
+ *   - 本地存档直接替换为该账号云端版本
+ *   - 后续通关写云端就是写到这个账号上，多端共享
+ */
 async function promptCodeAndPull(refresh: () => void): Promise<void> {
   // prompt 仍保留：toast 是单向提示，不能输入；输入仍需 prompt 阻塞调用
   const code = prompt('请输入 8 位同步编号：');
@@ -863,21 +868,13 @@ async function promptCodeAndPull(refresh: () => void): Promise<void> {
     showToast('编号格式错误，必须是 8 位数字', 'error');
     return;
   }
-  const remote = await pullByCode(trimmed);
-  if (!remote) {
-    showToast('未找到该编号，请检查输入是否正确', 'error', 2400);
+  const me = await adoptAccount(trimmed);
+  if (!me) {
+    showToast('未找到该编号或操作过于频繁', 'error', 2400);
     return;
   }
-  const changed = storage.mergeRemote(remote, trimmed);
-  if (changed) {
-    // 已绑定云端身份的话，把合并结果回推一次（保持云端 = 本地）
-    if (storage.getCloudCode()) {
-      void pushImmediate(remote);
-    }
-    showToast('进度已恢复！', 'success');
-  } else {
-    showToast('已是最新进度，无需更新', 'info');
-  }
+  storage.adoptRemoteAccount(me.code, me.progress);
+  showToast(`已切换到编号 ${me.code} 的进度`, 'success', 2400);
   refresh();
 }
 
