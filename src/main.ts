@@ -61,10 +61,32 @@ document.addEventListener(
   'touchmove',
   (e) => {
     const target = e.target as HTMLElement | null;
-    if (target && target.closest('#app')) e.preventDefault();
+    if (!target || !target.closest('#app')) return;
+    // overlay 内部的可滚动元素（关卡选择列表、设置面板等）必须放行
+    // 否则触屏滑动会被全局拦截，列表无法滚动
+    // 判定：从 target 向上找，存在任何"内容溢出且 overflow-y 允许滚动"的祖先就放行
+    if (isInsideScrollable(target)) return;
+    e.preventDefault();
   },
   { passive: false }
 );
+
+/**
+ * 判断元素是否在某个"可滚动容器"内部。
+ * 用于区分"需要拦截的全局橡皮筋"和"用户在列表里正常滚动"两种 touchmove。
+ */
+function isInsideScrollable(el: HTMLElement): boolean {
+  let cur: HTMLElement | null = el;
+  while (cur && cur !== document.body) {
+    const style = getComputedStyle(cur);
+    const oy = style.overflowY;
+    const canScrollY =
+      (oy === 'auto' || oy === 'scroll') && cur.scrollHeight > cur.clientHeight;
+    if (canScrollY) return true;
+    cur = cur.parentElement;
+  }
+  return false;
+}
 
 const params = new URLSearchParams(location.search);
 const recoverCode = params.get('recover');
