@@ -1,4 +1,5 @@
 import { defineConfig, loadEnv } from 'vite';
+import { resolve } from 'path';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
@@ -33,6 +34,13 @@ export default defineConfig(({ mode }) => {
       // 项目只有一个 styles.css 入口，不会真的拆，但配置上保留以便将来按 route 拆 CSS
       cssCodeSplit: true,
       rollupOptions: {
+        // 多入口：游戏主页 + 独立后台管理页
+        // /admin.html 完全独立 chunk，不进游戏 main bundle，
+        // 游戏玩家访问主页时不会下载任何 admin 代码
+        input: {
+          main: resolve(__dirname, 'index.html'),
+          admin: resolve(__dirname, 'admin.html'),
+        },
         output: {
           // 文件名稳定的命名规则，便于 vercel.json 中的 /assets/* 缓存匹配
           entryFileNames: 'assets/[name]-[hash].js',
