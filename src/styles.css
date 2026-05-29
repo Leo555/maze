@@ -347,8 +347,8 @@ body {
   background: var(--surface-strong);
   border: 1px solid var(--border);
   border-radius: 16px;
-  padding: 48px 56px;
-  min-width: 360px;
+  padding: 56px 64px 48px;
+  min-width: 420px;
   text-align: center;
   box-shadow: var(--shadow-card);
   backdrop-filter: blur(14px);
@@ -371,13 +371,15 @@ body {
  */
 .menu-icon-stack {
   position: absolute;
-  top: 18px;
-  right: 18px;
+  top: 14px;
+  right: 14px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   /* 不阻挡卡片自身点击；按钮自己会接收事件 */
   pointer-events: none;
+  /* 提层级，确保盖在卡片背景之上、不被任何 transform 子层挡住 */
+  z-index: 1;
 }
 .menu-icon-stack > * {
   pointer-events: auto;
@@ -424,15 +426,17 @@ body {
   font-size: 36px;
   font-weight: 400;
   letter-spacing: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   color: var(--text);
+  /* 给右上角图标条留出安全距离，避免标题在窄卡片下贴近图标 */
+  padding: 0 28px;
 }
 
 .scene-subtitle {
   font-size: 13px;
   color: var(--text-muted);
   letter-spacing: 4px;
-  margin-bottom: 36px;
+  margin-bottom: 40px;
   /* 副标题保持单行，窄屏溢出由 ellipsis 截断而非换行 */
   white-space: nowrap;
   overflow: hidden;
@@ -441,11 +445,11 @@ body {
 
 /* 主菜单进度展示 */
 .scene-progress {
-  margin: -18px 0 28px;
+  margin: -16px 0 32px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .scene-progress .progress-line.main {
@@ -485,7 +489,7 @@ body {
 .btn-group {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
   align-items: stretch;
 }
 
@@ -1010,6 +1014,9 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  /* QR 弹窗内容紧凑，不需要 .scene-card 默认的 420px 下限，
+   * 否则在窄屏上会被强行撑大。这里恢复一个更温和的下限。 */
+  min-width: 320px;
   /* relative：让右上角的 .qr-close-icon 绝对定位锚定在卡片内 */
   position: relative;
 }
@@ -1683,20 +1690,24 @@ body {
 /* 响应式 */
 @media (max-width: 600px) {
   .scene-card {
-    padding: 36px 28px;
-    min-width: 280px;
+    padding: 44px 36px 36px;
+    /* 移动端：min-width 不再硬撑，让卡片在小屏自然贴合 viewport，
+     * 同时保持一个合理的下限防止过窄 */
+    min-width: 0;
+    width: min(86vw, 380px);
     max-height: calc(100dvh - 40px);
     overflow-y: auto;
   }
   .scene-title {
     font-size: 26px;
     letter-spacing: 4px;
+    padding: 0 24px;
   }
   .scene-subtitle {
-    margin-bottom: 24px;
+    margin-bottom: 28px;
   }
   .scene-progress {
-    margin: -12px 0 22px;
+    margin: -10px 0 24px;
   }
   .scene-progress .progress-line.main {
     font-size: 13px;
