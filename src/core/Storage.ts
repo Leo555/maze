@@ -146,17 +146,28 @@ export class Storage {
     }
   }
 
-  /** 启动时拉云端，存在则覆盖本地 */
+  /** 启动时拉云端，存在则覆盖本地（progress + nick 一并同步） */
   private async pullFromCloud(): Promise<void> {
     try {
       const remote = await pullByCode(this.code);
       if (remote) {
-        const same = JSON.stringify(remote) === JSON.stringify(this.data);
+        let dirty = false;
+        // progress：与本地不一致才覆盖（避免不必要的 notify / DOM 重渲染）
+        const same = JSON.stringify(remote.progress) === JSON.stringify(this.data);
         if (!same) {
-          this.data = remote;
+          this.data = remote.progress;
           this.flushLocal();
-          this.notifyChange();
+          dirty = true;
         }
+        // nick：云端为权威。云端有值就同步本地缓存；
+        // 若云端 null 而本地有，说明本地缓存陈旧（玩家在另一设备清空了昵称，
+        // 或 code 在云端不存在昵称记录）→ 也覆盖为 null
+        if (remote.nick !== this.nick) {
+          this.nick = remote.nick;
+          this.flushLocalNick();
+          dirty = true;
+        }
+        if (dirty) this.notifyChange();
       }
     } finally {
       this.bootstrapResolve?.();
@@ -171,7 +182,7 @@ export class Storage {
     return this.code;
   }
 
-  /** 切换到指定 code（扫码 / 输入恢复）：替换本地 code + 拉一次云端 */
+  /** 切换到指定 code（扫码 / 输入恢复）：替换本地 code + 拉一次云端（progress + nick） */
   async adoptCode(newCode: string): Promise<boolean> {
     if (!isValidCode(newCode)) return false;
     const remote = await pullByCode(newCode);
@@ -182,11 +193,11 @@ export class Storage {
     } catch {
       /* ignore */
     }
-    this.data = remote;
+    this.data = remote.progress;
     this.flushLocal();
-    // 接管别人的 code = 接管别人的身份，本地缓存的旧昵称不再属于这个 code
-    // 先清掉，待 pullFromCloud 等下次拉到这个 code 在云端的真实昵称
-    this.nick = null;
+    // 接管别人的 code = 接管别人的身份，本地缓存的旧昵称已不属于这个 code。
+    // 直接采用云端值（无值则为 null），让欢迎语 / 排行榜 / 设置页都立刻反映新身份。
+    this.nick = remote.nick;
     this.flushLocalNick();
     this.notifyChange();
     return true;

@@ -21,10 +21,12 @@ import {
   type OverallRankItem,
   type LevelRankItem,
   isValidCode,
+  isValidNick,
 } from '../../shared/types';
 import { formatTime } from '../core/utils';
 
 const CODE_KEY = 'maze_code';
+const NICK_KEY = 'maze_nick';
 const TOP_LIMIT = 50;
 
 type Tab = 'overall' | 'level';
@@ -39,6 +41,23 @@ function getMyCode(): string {
     return v && isValidCode(v) ? v : '';
   } catch {
     return '';
+  }
+}
+
+/**
+ * 从本地缓存读取昵称（兜底）。
+ *
+ * 此页有意不加载 storage 单例（保持独立 bundle 的瘦身设计），
+ * 所以直接从 localStorage 读 maze_nick；用 isValidNick 防御历史脏数据。
+ *
+ * 优先级：榜单 API 返回的 nick > 本地缓存。前者用于已上榜玩家，后者用于未上榜玩家。
+ */
+function getMyLocalNick(): string | null {
+  try {
+    const v = localStorage.getItem(NICK_KEY);
+    return v && isValidNick(v) ? v : null;
+  } catch {
+    return null;
   }
 }
 
@@ -171,10 +190,15 @@ function renderList(kind: Tab, items: OverallRankItem[] | LevelRankItem[]): void
   }
 
   let myRank: number | null = null;
+  // 已上榜玩家：榜单 API 返回的 nick 是云端权威值，优先采用
+  let myNickFromList: string | null = null;
   const rows: string[] = [];
   for (const it of items) {
     const isMe = !!myCode && it.code === myCode;
-    if (isMe && myRank === null) myRank = it.rank;
+    if (isMe) {
+      if (myRank === null) myRank = it.rank;
+      if (it.nick && isValidNick(it.nick)) myNickFromList = it.nick;
+    }
     if (kind === 'overall') {
       const o = it as OverallRankItem;
       rows.push(
@@ -201,10 +225,14 @@ function renderList(kind: Tab, items: OverallRankItem[] | LevelRankItem[]): void
   }
   list.innerHTML = rows.join('');
 
+  // me-hint 文案：根据"是否上榜 + 是否有昵称"四种组合给个性化提示
+  // 用 textContent 渲染，防止昵称中的特殊字符触发 XSS
   if (myCode) {
+    const myNick = myNickFromList ?? getMyLocalNick();
+    const prefix = myNick ? `${myNick}，` : '';
     meHint.textContent = myRank
-      ? `你目前排名第 ${myRank} 位${myRank > 3 ? '，继续努力！' : ''}`
-      : '你还未上榜，去通关解锁排名吧';
+      ? `${prefix}你目前排名第 ${myRank} 位${myRank > 3 ? '，继续努力！' : ''}`
+      : `${prefix}你还未上榜，去通关解锁排名吧`;
   } else {
     meHint.textContent = '';
   }

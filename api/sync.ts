@@ -6,6 +6,10 @@
  * 同源校验：必须来自白名单 Origin/Referer，拦第三方网页直接拉取
  * 限流：同 IP 5 分钟最多 30 次。
  *
+ * 响应同时返回 progress + nick：
+ *   - 玩家启动 / 切换 code 时只发一次请求即可同步两者
+ *   - 昵称仅在云端有时返回，缺失时为 null（前端兜底显示 maskCode 即可）
+ *
  * 实现说明：
  *   query 解析用 WHATWG URL（new URL + searchParams）而不是 req.query。
  *   `req.query` 由 Vercel runtime 注入，部分历史版本内部仍用 node:url.parse()，
@@ -15,7 +19,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { json, checkOrigin, getClientIp, getQueryParam } from './_lib/http.js';
-import { getProgress } from './_lib/kv.js';
+import { getProgress, getNick } from './_lib/kv.js';
 import { isValidCode } from '../shared/types.js';
 import { kv } from '@vercel/kv';
 
@@ -49,10 +53,13 @@ export default async function handler(
     return;
   }
 
-  const progress = await getProgress(code);
+  // 并发拉取 progress + nick：节省一次 RTT
+  // 注意：progress 不存在视为整个 code 不存在（KV 中 nick 单独存在但 progress 缺失
+  // 是异常状态，比照原行为返回 404 更稳妥）
+  const [progress, nick] = await Promise.all([getProgress(code), getNick(code)]);
   if (!progress) {
     json(res, 404, { error: 'not_found' });
     return;
   }
-  json(res, 200, { progress });
+  json(res, 200, { progress, nick: nick ?? null });
 }

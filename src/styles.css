@@ -443,6 +443,35 @@ body {
   text-overflow: ellipsis;
 }
 
+/* 主菜单欢迎语：玩家设置昵称后才显示，作为个人化标识 */
+.scene-greeting {
+  /* 紧贴在副标题下方，与进度行有视觉分组 */
+  margin: -8px 0 20px;
+  font-size: 13px;
+  letter-spacing: 2px;
+  color: var(--accent, var(--text-soft));
+  font-weight: 500;
+  text-align: center;
+  /* 长昵称兜底：单行省略，避免撑破窄屏卡片 */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* 入场动画：透明度淡入，不抢主标题焦点 */
+  animation: greeting-fade-in 0.6s ease-out 0.15s both;
+}
+
+@keyframes greeting-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* 主菜单进度展示 */
 .scene-progress {
   margin: -16px 0 32px;
@@ -793,6 +822,26 @@ body {
   margin: 16px 0 24px;
   height: 36px;
   color: var(--border-strong);
+}
+
+/*
+ * 结算 / 失败页的昵称称呼。
+ * 紧贴在副标题下方，作为"个人化"标识；与主菜单的 .scene-greeting 视觉风格保持一致，
+ * 但因结算卡内容更紧凑，间距与字号更小一档。
+ */
+.result-greeting {
+  margin: 4px 0 12px;
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: var(--accent, var(--text-soft));
+  font-weight: 500;
+  text-align: center;
+  /* 长昵称兜底 */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  animation: greeting-fade-in 0.5s ease-out 0.1s both;
 }
 
 .star {

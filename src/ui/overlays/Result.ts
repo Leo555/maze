@@ -21,6 +21,22 @@ export interface ResultData {
   hasNext: boolean;
 }
 
+/**
+ * 根据通关表现 + 昵称生成称呼语。
+ *
+ * 设计：
+ *   - 无昵称：返回 null，结算页保持原样（不强行打扰）
+ *   - 有昵称 + 3 星：表扬性称呼
+ *   - 有昵称 + ≤2 星：温和鼓励性称呼
+ *
+ * 文案保持简短；后续若需 A/B 调整文案放在这里集中改。
+ */
+function buildResultGreeting(stars: number, nick: string | null): string | null {
+  if (!nick) return null;
+  if (stars >= 3) return `太 棒 了 · ${nick}`;
+  return `继 续 加 油 · ${nick}`;
+}
+
 export function showResult(
   data: ResultData,
   handlers: {
@@ -60,6 +76,17 @@ export function showResult(
       ${data.isNewBest ? '<div class="row" style="color:#ffcb47;border:none"><span>NEW BEST!</span><span></span></div>' : ''}
     </div>
   `;
+
+  // 昵称称呼：插入到副标题与星星行之间，用 textContent 防昵称中的特殊字符破坏 DOM。
+  // 与主菜单欢迎语形成呼应——玩家从命名到通关全程被"看见"。
+  const greeting = buildResultGreeting(data.stars, storage.getNick());
+  if (greeting) {
+    const subtitle = card.querySelector('.scene-subtitle');
+    const g = document.createElement('div');
+    g.className = 'result-greeting';
+    g.textContent = greeting;
+    subtitle?.insertAdjacentElement('afterend', g);
+  }
 
   const btnGroup = document.createElement('div');
   btnGroup.className = 'btn-group';
@@ -142,6 +169,16 @@ export function showFail(
     <div class="scene-title">失  败</div>
     <div class="scene-subtitle">${reason}</div>
   `;
+
+  // 失败页也显示昵称鼓励：失败时玩家心理压力较高，加一句轻量称呼能软化打击。
+  const nick = storage.getNick();
+  if (nick) {
+    const subtitle = card.querySelector('.scene-subtitle');
+    const g = document.createElement('div');
+    g.className = 'result-greeting';
+    g.textContent = `别 灰 心 · ${nick}`;
+    subtitle?.insertAdjacentElement('afterend', g);
+  }
   const btnGroup = document.createElement('div');
   btnGroup.className = 'btn-group';
 

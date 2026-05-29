@@ -410,9 +410,21 @@ async function main(): Promise<void> {
   {
     const res = makeRes();
     await syncH(makeReq({ url: `/api/sync?code=${code1}` }), res);
-    const body = parseJson(res) as { progress?: { unlocked: number } };
+    const body = parseJson(res) as {
+      progress?: { unlocked: number };
+      nick?: string | null;
+    };
     ok('sync → 200', res.statusCode === 200);
     ok('progress.unlocked=4', body.progress?.unlocked === 4);
+    // 之前 nick 测试用例已经给 code1 设了"迷雾旅人"，sync 应该一并返回
+    ok('sync 同时返回 nick=迷雾旅人', body.nick === '迷雾旅人');
+  }
+  {
+    // code2 没设过 nick → 应返回 nick=null（不报错、不缺失字段）
+    const res = makeRes();
+    await syncH(makeReq({ url: `/api/sync?code=${code2}` }), res);
+    const body = parseJson(res) as { nick?: string | null };
+    ok('sync 无昵称的 code → nick=null', body.nick === null);
   }
   {
     const res = makeRes();

@@ -15,6 +15,8 @@ import { isValidCode, isValidNick } from '../../shared/types';
 
 interface SyncResponse {
   progress: SaveData;
+  /** 云端昵称；可能为 null（玩家从未设置过）。后端字段缺失时统一回退为 null。 */
+  nick?: string | null;
 }
 
 interface SaveResponse {
@@ -36,8 +38,20 @@ interface LevelLbResponse {
   items: LevelRankItem[];
 }
 
-/** 用 8 位 code 拉取进度 */
-export async function pullByCode(code: string): Promise<SaveData | null> {
+/**
+ * 用 8 位 code 拉取进度 + 昵称。
+ *
+ * 返回值：
+ *   - 拉取成功 → { progress, nick }；nick 在云端未设置时为 null
+ *   - 网络异常 / code 不存在 / 限流 → null
+ *
+ * 兼容历史响应：
+ *   早期 /api/sync 仅返回 { progress }，未来若灰度发布也只用 progress 字段；
+ *   此处通过 `data.nick ?? null` 收敛缺失为 null，调用方无需关心。
+ */
+export async function pullByCode(
+  code: string
+): Promise<{ progress: SaveData; nick: string | null } | null> {
   if (!isValidCode(code)) return null;
   try {
     const res = await fetch(`/api/sync?code=${encodeURIComponent(code)}`, {
@@ -45,7 +59,13 @@ export async function pullByCode(code: string): Promise<SaveData | null> {
     });
     if (res.status === 200) {
       const data = (await res.json()) as SyncResponse;
-      return data.progress;
+      return {
+        progress: data.progress,
+        // 防御：后端理论上保证返回 string|null，但同时验证 isValidNick
+        // 避免 KV 历史脏数据（如空串、超长值）污染前端 UI
+        nick:
+          typeof data.nick === 'string' && isValidNick(data.nick) ? data.nick : null,
+      };
     }
     return null;
   } catch {

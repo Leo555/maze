@@ -22,6 +22,7 @@ import { showShareDialog } from './ShareDialog';
  * - cleared / total: 已通关数 / 总关卡数
  * - stars / starsMax: 累计星数 / 最大星数
  * - allCleared: 全部通关
+ * - nick: 玩家昵称（云端 / 本地缓存的同步值），无昵称为 null
  */
 function computeProgress(): {
   nextLevelId: number;
@@ -32,6 +33,7 @@ function computeProgress(): {
   starsMax: number;
   allCleared: boolean;
   fresh: boolean; // 完全没玩过（新存档）
+  nick: string | null;
 } {
   let cleared = 0;
   let stars = 0;
@@ -59,7 +61,26 @@ function computeProgress(): {
     starsMax: levels.length * 3,
     allCleared,
     fresh: cleared === 0,
+    nick: storage.getNick(),
   };
+}
+
+/**
+ * 根据进度状态拼欢迎语。
+ *
+ * 设计：
+ *   - 无昵称：返回 null（保持原 UI 不变，不强行打扰）
+ *   - fresh + 有昵称：    "你好，{nick}"（首次见面）
+ *   - 全通关 + 有昵称：   "欢迎回来，{nick}"（亲切；100 关成就由进度行展示，避免重复）
+ *   - 已通关 + 有昵称：   "欢迎回来，{nick}"
+ *
+ * 文案保持简洁；昵称 12 字上限已避免撑破窄屏布局。
+ * 注意：返回的字符串最终通过 textContent 渲染，无需 HTML 转义；不要在调用方用 innerHTML。
+ */
+function buildGreeting(p: ReturnType<typeof computeProgress>): string | null {
+  if (!p.nick) return null;
+  if (p.fresh) return `你 好 · ${p.nick}`;
+  return `欢 迎 回 来 · ${p.nick}`;
 }
 
 /**
@@ -118,6 +139,17 @@ export function showMainMenu(handlers: {
       <div class="scene-title">晨 雾 迷 径</div>
       <div class="scene-subtitle">MISTY · PATH · DAWN</div>
     `;
+
+    // 欢迎语：仅在玩家设置过昵称时显示。
+    // 放在副标题与进度行之间，作为"个人化"标识；无昵称时保持原视觉不变。
+    // 用 textContent 写入，天然防止昵称中的特殊字符（如 <、&）破坏 DOM 或触发 XSS。
+    const greeting = buildGreeting(progress);
+    if (greeting) {
+      const g = document.createElement('div');
+      g.className = 'scene-greeting';
+      g.textContent = greeting;
+      card.appendChild(g);
+    }
 
     // 进度行
     const progressEl = document.createElement('div');
