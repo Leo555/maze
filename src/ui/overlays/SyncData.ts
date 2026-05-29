@@ -5,7 +5,12 @@
  *   BasicSettings 管"个性化偏好"（昵称、音量），SyncData 管"账号/数据风险操作"
  *   （获取同步编号、扫码恢复、清除存档）。
  *
- * 设计：把"清除"放在最下面、用 confirm 二次确认 + danger 视觉，避免误触。
+ * 布局原则：
+ *   - 同一页内有两类语义完全不同的功能（同步 / 销毁），
+ *     使用 section 卡片显式分组，每个 section 有标题 + 内容区，
+ *     避免"settings-row + 自定义面板"两种风格混排造成的视觉断裂。
+ *   - 危险操作（清除）放最下方独立 section，按钮使用 danger 视觉，
+ *     再叠加 Confirm 二次确认，三重防误触。
  */
 
 import { audio } from '../../core/Audio';
@@ -16,28 +21,50 @@ import { showConfirm } from './Confirm';
 import { buildSyncPanel } from './sync/SyncPanel';
 import { pushErrorMessage } from '../../core/PushErrorMessage';
 
+/** 创建一个带标题的分区容器 */
+function buildSection(title: string, subtitle?: string): {
+  section: HTMLElement;
+  body: HTMLElement;
+} {
+  const section = document.createElement('section');
+  section.className = 'sync-section';
+
+  const head = document.createElement('div');
+  head.className = 'sync-section-head';
+  head.innerHTML = `
+    <div class="sync-section-title">${title}</div>
+    ${subtitle ? `<div class="sync-section-sub">${subtitle}</div>` : ''}
+  `;
+  section.appendChild(head);
+
+  const body = document.createElement('div');
+  body.className = 'sync-section-body';
+  section.appendChild(body);
+
+  return { section, body };
+}
+
 export function showSyncData(onBack: () => void): void {
   audio.playSfx('ui_open');
 
   const scene = document.createElement('div');
   scene.className = 'scene';
   const card = document.createElement('div');
-  card.className = 'scene-card';
+  card.className = 'scene-card scene-card-sync';
   card.innerHTML = `
     <div class="scene-title">同 步 数 据</div>
     <div class="scene-subtitle">SYNC &amp; DATA</div>
   `;
 
-  // === 同步进度面板（云端关联状态 + 编号显示 + 输入码恢复） ===
-  card.appendChild(buildSyncPanel());
+  // === Section 1: 同步进度（云端关联状态 + 编号显示 + 输入码恢复） ===
+  const sync = buildSection('同步进度', '在其他设备恢复你的通关进度');
+  sync.body.appendChild(buildSyncPanel());
+  card.appendChild(sync.section);
 
-  // === 清除通关记录（数据销毁高危操作，放在面板下方） ===
-  const resetRow = document.createElement('div');
-  resetRow.className = 'settings-row';
-  resetRow.innerHTML = `<label>存档</label>`;
+  // === Section 2: 数据管理（清除存档高危操作） ===
+  const data = buildSection('数据管理', '高危操作，执行前会再次确认');
   const resetBtn = document.createElement('button');
-  resetBtn.className = 'btn';
-  resetBtn.style.flex = '1';
+  resetBtn.className = 'btn sync-danger';
   resetBtn.textContent = '清 除 通 关 记 录';
   attachClickSfx(resetBtn);
   resetBtn.onclick = async () => {
@@ -69,13 +96,13 @@ export function showSyncData(onBack: () => void): void {
       resetBtn.textContent = original;
     }
   };
-  resetRow.appendChild(resetBtn);
-  card.appendChild(resetRow);
+  data.body.appendChild(resetBtn);
+  card.appendChild(data.section);
 
+  // 返回按钮
   const back = document.createElement('button');
-  back.className = 'btn primary';
+  back.className = 'btn primary sync-back';
   back.textContent = '返  回';
-  back.style.marginTop = '20px';
   attachClickSfx(back);
   back.onclick = () => onBack();
   card.appendChild(back);

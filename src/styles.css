@@ -909,54 +909,116 @@ body {
   color: var(--text);
 }
 
-/* ========== 同步进度面板（同步数据页内） ========== */
-.settings-sync {
-  margin-top: 18px;
-  padding: 14px 16px;
-  border-top: 1px solid var(--border);
+/* ========== 同步数据页（SyncData） ==========
+ * 结构：
+ *   .scene-card-sync                   -> 整体卡片（覆写 .scene-card 默认 padding 让两个 section 更舒展）
+ *     > .scene-title / .scene-subtitle
+ *     > .sync-section × N              -> 语义分组（同步进度 / 数据管理）
+ *         > .sync-section-head         -> 分区标题 + 副标题
+ *         > .sync-section-body         -> 实际内容
+ *     > .btn.primary.sync-back         -> 返回按钮
+ *
+ * 设计要点：
+ *   - 用 section 卡片显式分组，避免和 BasicSettings 的 settings-row 风格混排
+ *   - 每个 section 自带左对齐标题，去掉之前那种"贴在 scene-card 内的 border-top 浮岛"感
+ *   - 危险按钮（清除）使用 .sync-danger 视觉，与 confirm-danger 风格呼应
+ */
+.scene-card-sync {
+  /* 上下留白略收，让两个 section 自身的 padding 主导节奏；左右沿用 scene-card 默认 */
+  padding: 48px 56px 36px;
+  text-align: left;
+  /* 防止两个 section 之间过宽导致竖向尺寸超 viewport */
+  max-height: calc(100dvh - 60px);
+  overflow-y: auto;
+}
+/* 标题/副标题在左对齐布局下也保持居中（与其他页一致的视觉风格） */
+.scene-card-sync .scene-title,
+.scene-card-sync .scene-subtitle {
+  text-align: center;
+}
+
+.sync-section {
+  margin-top: 22px;
+  padding: 16px 18px 18px;
+  background: rgba(58, 52, 43, 0.025);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sync-section-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sync-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  color: var(--text);
+}
+.sync-section-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  line-height: 1.4;
+}
+.sync-section-body {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
-.settings-sync .sync-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
-  letter-spacing: 1px;
+
+/* 同步进度面板内部 */
+.sync-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
-.settings-sync .sync-tip {
+.sync-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sync-actions .btn {
+  width: 100%;
+  font-size: 13px;
+  padding: 10px 12px;
+  letter-spacing: 1.5px;
+}
+.sync-actions .sync-secondary {
   font-size: 12px;
+  padding: 8px 10px;
+  background: transparent;
   color: var(--text-soft);
-  line-height: 1.4;
 }
-.settings-sync .sync-hint {
-  font-size: 11px;
-  color: var(--text-muted);
-  margin-top: 2px;
-  text-align: center;
-}
-.settings-sync .sync-code-row {
+
+/* 编号展示卡片（含复制按钮） */
+.sync-code-row {
   display: flex;
   align-items: center;
   gap: 10px;
   background: var(--accent-soft);
-  padding: 10px 12px 10px 14px;
+  padding: 12px 14px;
   border-radius: 10px;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(232, 168, 124, 0.35);
 }
 /* 编号信息（label + 编号值）占据左侧主区域，自动撑开 */
-.settings-sync .sync-code-info {
+.sync-code-info {
   flex: 1 1 auto;
   min-width: 0; /* flex 子项允许内容溢出收缩，避免编号长字符撑爆 */
 }
-.settings-sync .sync-code-label {
-  font-size: 12px;
+.sync-code-label {
+  font-size: 11px;
   color: var(--text-soft);
+  letter-spacing: 1px;
+  margin-bottom: 2px;
 }
-.settings-sync .sync-code-value {
-  font-size: 20px;
+.sync-code-value {
+  font-size: 22px;
   font-weight: 700;
-  letter-spacing: 2px;
+  letter-spacing: 3px;
   color: var(--accent-strong);
   font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', 'Roboto Mono', monospace;
   /* 编号若极长（虽然 8 位不会，但稳妥起见）超出时省略 */
@@ -965,13 +1027,13 @@ body {
   white-space: nowrap;
 }
 /* 编号行内的小复制按钮：图标 + 文字组合，紧凑且醒目 */
-.settings-sync .sync-copy-btn {
+.sync-copy-btn {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.7);
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--accent-strong);
@@ -979,53 +1041,56 @@ body {
   font-size: 12px;
   letter-spacing: 1px;
   cursor: pointer;
-  transition: background 0.15s, transform 0.1s, color 0.15s;
+  transition: background 0.15s, transform 0.1s, color 0.15s, border-color 0.15s;
   white-space: nowrap;
 }
-.settings-sync .sync-copy-btn:hover {
-  background: rgba(255, 255, 255, 0.85);
+.sync-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: var(--border-strong);
 }
-.settings-sync .sync-copy-btn:active {
+.sync-copy-btn:active {
   transform: scale(0.96);
 }
-.settings-sync .sync-copy-btn .sync-copy-icon {
+.sync-copy-btn .sync-copy-icon {
   font-size: 14px;
   line-height: 1;
 }
-.settings-sync .sync-copy-btn.copied {
+.sync-copy-btn.copied {
   color: var(--ok, #2a9d8f);
   background: rgba(42, 157, 143, 0.08);
-  border-color: rgba(42, 157, 143, 0.3);
+  border-color: rgba(42, 157, 143, 0.35);
 }
-/* 输入其他编号 - 次要操作，独占一行，低视觉权重 */
-.settings-sync .sync-secondary {
+
+/* 危险操作按钮：清除通关记录
+ * 视觉上与 .btn.confirm-danger 呼应（红色描边 + 浅红底），
+ * 但在主页面上比 confirm 弹窗稍温和（避免一进页面就刺眼，
+ * 真正的强警示交给 Confirm 弹窗承担）
+ */
+.btn.sync-danger {
   width: 100%;
-  font-size: 12px;
-  padding: 8px 10px;
-  margin-top: 6px;
-  white-space: nowrap;
+  background: rgba(192, 64, 64, 0.06);
+  border-color: rgba(192, 64, 64, 0.32);
+  color: #b94545;
+  letter-spacing: 2px;
+  font-size: 13px;
+  padding: 10px 12px;
 }
-/* 二维码按钮 - 主要操作，独占一行 */
-.settings-sync .sync-qr {
+.btn.sync-danger:hover {
+  background: rgba(192, 64, 64, 0.12);
+  border-color: rgba(192, 64, 64, 0.5);
+}
+.btn.sync-danger:active {
+  transform: translateY(0) scale(0.98);
+}
+.btn.sync-danger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* 返回按钮：脱离 section，独占下方 */
+.btn.sync-back {
   width: 100%;
-  font-size: 12px;
-  padding: 9px 10px;
-  margin-top: 6px;
-}
-/* 退出账号 - 次要操作，独占一行、低饱和 */
-.settings-sync .sync-unlink {
-  width: 100%;
-  font-size: 11px;
-  padding: 6px 10px;
-  margin-top: 6px;
-  background: transparent;
-  color: var(--text-muted);
-  border: 1px dashed var(--border);
-}
-.settings-sync .sync-unlink:hover,
-.settings-sync .sync-unlink:active {
-  color: var(--text);
-  border-color: var(--border-strong);
+  margin-top: 22px;
 }
 
 /* ========== 同步二维码弹窗（modal 层，叠在设置页之上） ========== */
@@ -1896,6 +1961,36 @@ body {
   .scene.scene-review .review-card {
     max-width: calc(100% - 24px);
     width: auto;
+  }
+
+  /* 同步数据页：手机上左右内边距收紧，section 内 padding 也收，
+   * 编号字号略小避免与复制按钮挤压
+   */
+  .scene-card-sync {
+    padding: 36px 22px 26px;
+  }
+  .sync-section {
+    padding: 14px 14px 16px;
+    margin-top: 16px;
+  }
+  .sync-code-row {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+  .sync-code-value {
+    font-size: 18px;
+    letter-spacing: 2px;
+  }
+  .sync-copy-btn {
+    padding: 7px 10px;
+    font-size: 11px;
+  }
+  .sync-copy-btn .sync-copy-text {
+    /* 移动端窄屏只留图标，避免编号被挤压；保持 a11y label */
+    display: none;
+  }
+  .btn.sync-back {
+    margin-top: 18px;
   }
 }
 
