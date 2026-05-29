@@ -27,7 +27,7 @@ import {
   ensureFirstSeen,
 } from './_lib/kv.js';
 import { checkWriteRate, commitWriteSession, acquireWriteLock } from './_lib/ratelimit.js';
-import { normalizeSave, isValidCode } from '../shared/types.js';
+import { normalizeSave, isValidCode, type SaveData } from '../shared/types.js';
 
 const MAX_UNLOCK_DELTA = 5;
 
@@ -90,8 +90,10 @@ export default async function handler(
     return;
   }
 
+  // current 在锁内读到，并要带出 finally 给排行榜 diff 用
+  let current: SaveData | null = null;
   try {
-    const current = await getProgress(code);
+    current = await getProgress(code);
     if (current && incoming.unlocked > current.unlocked + MAX_UNLOCK_DELTA) {
       json(res, 400, { error: 'unlock_delta_too_large' });
       return;
@@ -107,9 +109,9 @@ export default async function handler(
   void commitWriteSession(code, ip, ua).catch(() => {});
 
   // 副作用（fire-and-forget，失败不影响主响应）：
-  //   - 排行榜更新（综合榜 + 当前关速通榜）
+  //   - 排行榜更新（综合榜 + 单关速通榜，带 prev 做 diff 处理"清除/退化"场景）
   //   - 活跃天 / 首次创建标记 / 总用户数
-  void updateLeaderboards(code, incoming).catch(() => {});
+  void updateLeaderboards(code, incoming, current).catch(() => {});
   void markActive(code).catch(() => {});
   void ensureFirstSeen(code).catch(() => {});
 

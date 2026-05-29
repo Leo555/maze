@@ -125,47 +125,83 @@ export async function mgetNick(codes: string[]): Promise<(string | null)[]> {
  *   一旦玩家后续设置了昵称，setNick → backfillLeaderboards 会把当前进度补回榜单。
  *
  * 包含两件事：
- *   1. 综合榜 lb:overall 用 calcOverallScore 写入
- *   2. 玩家所有已通关关卡的速通榜
- *      —— 简化处理：每次 save 都把所有已通关关的 bestTime 同步到对应榜上
- *      （N=100 其实可以接受，但为减小 KV 调用，只更新 bestTime/bestStars
- *       发生变化的关。这里直接全量写最简单，pipeline 一次发出）
+ *   1. 综合榜 lb:overall 用 calcOverallScore 写入；若进度被清空（无任何
+ *      cleared 关卡）则从综合榜 zrem 整条记录，避免"清除存档后仍霸榜末位"。
+ *   2. 玩家所有已通关关卡的速通榜 lb:lvl:{i}：
+ *      - 本次仍 cleared 的关：zadd 覆盖 bestTime
+ *      - 本次不再 cleared 的关（玩家清除了存档 / 后端 last-write-wins 退化）：zrem
+ *      关键：必须传入 prev 进度做 diff，否则只能"加不能减"，玩家清除记录后
+ *      旧的速通分会永远挂在榜上。
+ *
+ * @param prev 上一次的进度（getProgress 拿到的，可能为 null=首次写入）
  */
 export async function updateLeaderboards(
   code: string,
-  progress: SaveData
+  progress: SaveData,
+  prev: SaveData | null
 ): Promise<void> {
   // 上榜资格：必须先有昵称
   const nick = await getNick(code);
   if (!nick) return;
 
-  await writeLeaderboards(code, progress);
+  await writeLeaderboards(code, progress, prev);
 }
 
 /**
- * 把当前 code 的全部进度写入排行榜（不查 nick，调用方需自行保证昵称已存在）。
+ * 把 code 的进度同步到排行榜（不查 nick，调用方需自行保证昵称已存在）。
  *
- * 使用场景：setNick 成功后，把"以前已通关但因无昵称未上榜"的进度补回榜单。
+ * 处理 3 种场景：
+ *   1. 首次写入 / 升级（无 prev 或 prev 没的关本次有）→ zadd
+ *   2. 同关刷新 best（prev 有 + 本次有）→ zadd 覆盖
+ *   3. 玩家清除/退化（prev 有 + 本次无）→ zrem
+ *
+ * 综合榜的"完全清空"特殊处理：unlocked=1 且 records 全空时，从 lb:overall zrem，
+ * 而不是写入 score=0；否则玩家清除后还会以 0 分占着综合榜名额。
+ *
  * 内部辅助函数，不暴露给 handler。
  */
 async function writeLeaderboards(
   code: string,
-  progress: SaveData
+  progress: SaveData,
+  prev: SaveData | null
 ): Promise<void> {
   const score = calcOverallScore(progress);
+  const isEmpty = score === 0; // unlocked<=1 + 无任何 stars
 
   const pipe = kv.pipeline();
-  // 综合榜
-  pipe.zadd('lb:overall', { score, member: code });
 
-  // 单关榜：每个有记录且已通关的关卡
+  // === 综合榜 ===
+  if (isEmpty) {
+    // 玩家清除了所有进度 → 从综合榜彻底移除（不要以 0 分留座）
+    pipe.zrem('lb:overall', code);
+  } else {
+    pipe.zadd('lb:overall', { score, member: code });
+  }
+
+  // === 单关速通榜：本次有效的关 zadd，prev 有但本次没有的关 zrem ===
+  // 收集本次有效（已通关 + 有有效 bestTime）的关卡 id，一次性算好集合便于做 diff
+  const currentValid = new Set<number>();
   for (const key of Object.keys(progress.records)) {
     const lvId = Number(key);
     if (!Number.isInteger(lvId) || lvId < 1 || lvId > 100) continue;
     const r = progress.records[lvId];
     if (!r || !r.cleared || !Number.isFinite(r.bestTime)) continue;
+    currentValid.add(lvId);
     pipe.zadd(`lb:lvl:${lvId}`, { score: r.bestTime, member: code });
   }
+
+  // prev 里曾经 cleared 但本次不再 cleared 的关 → zrem
+  if (prev) {
+    for (const key of Object.keys(prev.records)) {
+      const lvId = Number(key);
+      if (!Number.isInteger(lvId) || lvId < 1 || lvId > 100) continue;
+      const pr = prev.records[lvId];
+      if (!pr || !pr.cleared) continue; // 之前没在该榜上
+      if (currentValid.has(lvId)) continue; // 本次仍在榜，已经 zadd 覆盖
+      pipe.zrem(`lb:lvl:${lvId}`, code);
+    }
+  }
+
   await pipe.exec();
 }
 
@@ -176,15 +212,16 @@ async function writeLeaderboards(
  * 跳过写入 → 玩家后来设了昵称 → 此函数把 progress 写入榜单，让玩家立即可见排名。
  *
  * 与 updateLeaderboards 的区别：
- *   - updateLeaderboards: 在 save 路径调用，要查 nick 决定是否写
- *   - backfillLeaderboards: 在 setNick 路径调用，nick 刚被写入所以无需再查
+ *   - updateLeaderboards: 在 save 路径调用，需要 prev 做 diff zrem
+ *   - backfillLeaderboards: 在 setNick 路径调用，nick 刚被写入；此前因没昵称根本
+ *     没写过任何榜，所以 prev 视作 null，纯粹"按当前 progress 加分"即可
  *
  * fail-open：写榜失败不影响 setNick 主流程；下一次 save 会自然重试 updateLeaderboards。
  */
 export async function backfillLeaderboards(code: string): Promise<void> {
   const progress = await getProgress(code);
   if (!progress) return; // 还没玩过，无须回填
-  await writeLeaderboards(code, progress);
+  await writeLeaderboards(code, progress, null);
 }
 
 /**

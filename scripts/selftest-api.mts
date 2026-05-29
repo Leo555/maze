@@ -680,6 +680,170 @@ async function main(): Promise<void> {
     ok('补设昵称后已回填到单关榜', z4?.has(codeAnon) === true);
   }
 
+  // ---------- 清除存档：从所有相关排行榜彻底移除 ----------
+  // 玩家在前端点"清除通关记录"会触发 storage.reset() → POST /api/save
+  // 进度为 {unlocked:1, records:{}}。后端必须把该 code 从 lb:overall 与
+  // 它曾经上榜的所有 lb:lvl:N 中 zrem，否则旧成绩会一直挂在排行榜上。
+  console.log('\n=== POST /api/save: 清除存档 → 排行榜同步移除 ===');
+  {
+    const codeReset = 'rEs3T9Wq';
+    kvState.store.set(`nick:${codeReset}`, '将被清除的旅人');
+    kvState.store.delete(`sess:${codeReset}`);
+    kvState.store.delete(`rl:save:burst:${codeReset}`);
+
+    // 1. 先正常通关 3 关上榜
+    {
+      const r = makeRes();
+      await saveH(
+        makeReq({
+          method: 'POST',
+          url: '/api/save',
+          ip: '10.0.0.60',
+          ua: 'Mozilla/5.0 selftest reset',
+          body: {
+            code: codeReset,
+            progress: {
+              v: 1,
+              unlocked: 4,
+              records: {
+                1: { bestTime: 25, bestStars: 3, cleared: true },
+                2: { bestTime: 40, bestStars: 2, cleared: true },
+                3: { bestTime: 60, bestStars: 1, cleared: true },
+              },
+            },
+          },
+        }),
+        r
+      );
+      ok('清除前先 save → 200', r.statusCode === 200);
+    }
+    await new Promise((rs) => setTimeout(rs, 80));
+    {
+      const z = kvState.zsets.get('lb:overall');
+      ok('清除前 lb:overall 有 codeReset', z?.has(codeReset) === true);
+      const z1 = kvState.zsets.get('lb:lvl:1');
+      const z2 = kvState.zsets.get('lb:lvl:2');
+      const z3 = kvState.zsets.get('lb:lvl:3');
+      ok('清除前 lb:lvl:1 有 codeReset', z1?.has(codeReset) === true);
+      ok('清除前 lb:lvl:2 有 codeReset', z2?.has(codeReset) === true);
+      ok('清除前 lb:lvl:3 有 codeReset', z3?.has(codeReset) === true);
+    }
+
+    // 2. 模拟"清除存档"：unlocked=1, records 全空（由 storage.reset 推送）
+    // 清掉 sess 锚绕开 L1 5s 间隔
+    kvState.store.delete(`sess:${codeReset}`);
+    {
+      const r = makeRes();
+      await saveH(
+        makeReq({
+          method: 'POST',
+          url: '/api/save',
+          ip: '10.0.0.60',
+          ua: 'Mozilla/5.0 selftest reset',
+          body: {
+            code: codeReset,
+            progress: { v: 1, unlocked: 1, records: {} },
+          },
+        }),
+        r
+      );
+      ok('清除存档 save → 200', r.statusCode === 200, { body: r.body });
+    }
+    await new Promise((rs) => setTimeout(rs, 80));
+
+    // 3. 断言：综合榜 + 所有曾经上榜的单关榜都应该 zrem 掉 codeReset
+    {
+      const z = kvState.zsets.get('lb:overall');
+      ok('清除后 lb:overall 已移除 codeReset', !z?.has(codeReset));
+      const z1 = kvState.zsets.get('lb:lvl:1');
+      const z2 = kvState.zsets.get('lb:lvl:2');
+      const z3 = kvState.zsets.get('lb:lvl:3');
+      ok('清除后 lb:lvl:1 已移除 codeReset', !z1?.has(codeReset));
+      ok('清除后 lb:lvl:2 已移除 codeReset', !z2?.has(codeReset));
+      ok('清除后 lb:lvl:3 已移除 codeReset', !z3?.has(codeReset));
+    }
+  }
+
+  // ---------- 部分回退：通关数减少时，相应单关榜应被清理 ----------
+  // 场景：极端 last-write-wins 下旧设备覆盖新设备进度（玩家把 A 设备进度
+  // 同步到 B 后又在 B 上"清除某关"重玩失败 → cleared 由 true 变 false）。
+  // 期望：仅退掉的关从对应 lb:lvl 中 zrem，其余关与综合榜按新进度重写。
+  console.log('\n=== POST /api/save: 部分关卡退化 → 单关榜按 diff 移除 ===');
+  {
+    const codePart = 'pArT5fJk';
+    kvState.store.set(`nick:${codePart}`, '退化测试');
+    kvState.store.delete(`sess:${codePart}`);
+    kvState.store.delete(`rl:save:burst:${codePart}`);
+
+    // 1. 先存 3 关
+    {
+      const r = makeRes();
+      await saveH(
+        makeReq({
+          method: 'POST',
+          url: '/api/save',
+          ip: '10.0.0.61',
+          ua: 'Mozilla/5.0 selftest part',
+          body: {
+            code: codePart,
+            progress: {
+              v: 1,
+              unlocked: 4,
+              records: {
+                1: { bestTime: 20, bestStars: 3, cleared: true },
+                2: { bestTime: 30, bestStars: 2, cleared: true },
+                3: { bestTime: 40, bestStars: 1, cleared: true },
+              },
+            },
+          },
+        }),
+        r
+      );
+      ok('退化前 save → 200', r.statusCode === 200);
+    }
+    await new Promise((rs) => setTimeout(rs, 80));
+
+    // 2. 退化：第 2 / 3 关 cleared 变 false
+    kvState.store.delete(`sess:${codePart}`);
+    {
+      const r = makeRes();
+      await saveH(
+        makeReq({
+          method: 'POST',
+          url: '/api/save',
+          ip: '10.0.0.61',
+          ua: 'Mozilla/5.0 selftest part',
+          body: {
+            code: codePart,
+            progress: {
+              v: 1,
+              unlocked: 2,
+              records: {
+                1: { bestTime: 20, bestStars: 3, cleared: true },
+              },
+            },
+          },
+        }),
+        r
+      );
+      ok('退化 save → 200', r.statusCode === 200, { body: r.body });
+    }
+    await new Promise((rs) => setTimeout(rs, 80));
+
+    // 3. 断言：lb:lvl:1 仍在；lb:lvl:2/3 已移除；综合榜 score 重写
+    {
+      const z1 = kvState.zsets.get('lb:lvl:1');
+      const z2 = kvState.zsets.get('lb:lvl:2');
+      const z3 = kvState.zsets.get('lb:lvl:3');
+      ok('lb:lvl:1 保留', z1?.has(codePart) === true);
+      ok('lb:lvl:2 已移除', !z2?.has(codePart));
+      ok('lb:lvl:3 已移除', !z3?.has(codePart));
+      const z = kvState.zsets.get('lb:overall');
+      // unlocked=2 → cleared=1, stars=3 → score=1003
+      ok('综合榜 score 已重写为 1003', z?.get(codePart) === 1003, z?.get(codePart));
+    }
+  }
+
   // ---------- 7 天改名冷却 ----------
   console.log('\n=== Account: 改名 7 天冷却 ===');
   {
