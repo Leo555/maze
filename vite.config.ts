@@ -34,11 +34,14 @@ export default defineConfig(({ mode }) => {
       // 项目只有一个 styles.css 入口，不会真的拆，但配置上保留以便将来按 route 拆 CSS
       cssCodeSplit: true,
       rollupOptions: {
-        // 多入口：游戏主页 + 独立后台管理页
-        // /admin.html 完全独立 chunk，不进游戏 main bundle，
-        // 游戏玩家访问主页时不会下载任何 admin 代码
+        // 多入口：游戏主页 + 独立排行榜页 + 独立后台管理页
+        // 每个 .html 编译成一个独立 chunk，互不污染：
+        //   - 游戏主页玩家访问时 0 字节 admin / leaderboard 代码
+        //   - 排行榜页可独立分享、独立 SEO
+        //   - 后台页 noindex、独立鉴权
         input: {
           main: resolve(__dirname, 'index.html'),
+          leaderboard: resolve(__dirname, 'leaderboard.html'),
           admin: resolve(__dirname, 'admin.html'),
         },
         output: {

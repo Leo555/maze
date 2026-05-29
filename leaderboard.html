@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#F5EFE6" />
+
+    <!--
+      SEO：希望排行榜也被搜索引擎收录，吸引"晨雾迷径排行榜 / 攻略最快通关时间"
+      等长尾词流量。与 admin.html (noindex) 不同。
+    -->
+    <title>排行榜 · 晨雾迷径 | 最快通关速度与最高分玩家</title>
+    <meta
+      name="description"
+      content="晨雾迷径全球玩家排行榜：综合榜按通关数与三星总数排序，单关速通榜按用时升序。看看谁是迷雾迷宫的真正高手，以及你自己排名第几。"
+    />
+    <meta
+      name="keywords"
+      content="晨雾迷径排行榜,迷宫游戏排行榜,迷宫速通,通关时间,leaderboard,maze speedrun,puzzle ranking"
+    />
+    <meta name="robots" content="index,follow,max-image-preview:large" />
+    <link rel="canonical" href="https://maze.lz5z.com/leaderboard" />
+
+    <!-- 移动端 Web App 体验（与主页一致） -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="晨雾迷径排行榜" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="zh_CN" />
+    <meta property="og:site_name" content="晨雾迷径" />
+    <meta property="og:title" content="排行榜 · 晨雾迷径" />
+    <meta property="og:description" content="综合榜 + 100 关速通榜，看谁是迷雾迷宫的真正高手。" />
+    <meta property="og:url" content="https://maze.lz5z.com/leaderboard" />
+    <meta property="og:image" content="https://maze.lz5z.com/og-cover.png" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="排行榜 · 晨雾迷径" />
+    <meta
+      name="twitter:description"
+      content="综合榜 + 100 关速通榜，看谁是迷雾迷宫的真正高手。"
+    />
+    <meta name="twitter:image" content="https://maze.lz5z.com/og-cover.png" />
+  </head>
+  <body class="leaderboard-body">
+    <!-- noscript 兜底 + SEO 文本（首屏 HTML 内容质量信号） -->
+    <noscript>
+      <h1>晨雾迷径排行榜</h1>
+      <p>排行榜需要 JavaScript 支持。请启用后刷新本页。</p>
+    </noscript>
+
+    <div id="lb-root"></div>
+    <script type="module" src="/src/leaderboard/main.ts"></script>
+  </body>
+</html>
