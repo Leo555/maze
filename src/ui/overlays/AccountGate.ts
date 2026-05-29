@@ -112,7 +112,7 @@ function renderHome(): void {
   const recoverBtn = document.createElement('button');
   recoverBtn.className = 'btn gate-btn';
   recoverBtn.type = 'button';
-  recoverBtn.textContent = '输 入 编 号 恢 复';
+  recoverBtn.textContent = '输 入 编 号';
   attachClickSfx(recoverBtn);
   recoverBtn.onclick = () => renderRecover();
 

@@ -283,6 +283,8 @@ body {
 .gate-btn {
   flex: 1;
   max-width: 180px;
+  /* 防止文案被宽度限制挤换行（letter-spacing 容易超出 180px） */
+  white-space: nowrap;
   /* 复用 .btn 的基础样式；这里只调整尺寸 */
 }
 
