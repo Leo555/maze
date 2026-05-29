@@ -494,33 +494,32 @@ body {
   box-shadow: var(--shadow-card);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  /* relative：让卡片右上角的 .menu-icon-stack 能绝对定位锚定 */
+  /* relative：scene-card-qr 的 .qr-close-icon 等内部绝对定位元素依赖 */
   position: relative;
 }
 
-/* 主菜单卡片右上角的图标按钮：视觉上仅是一个 SVG
- * 保留 <button> 标签是为了 a11y / 键盘可达；样式上完全裸露
- */
 /*
- * 主菜单卡片右上角的竖向图标条：4 个次要功能入口（基础设置 / 同步数据 / 排行榜 / 分享）。
+ * 主菜单屏幕右上角的竖向图标条：4 个次要功能入口（基础设置 / 同步数据 / 排行榜 / 分享）。
  *
  * 设计：
+ *   - 视觉锚定到屏幕右上角，与卡片解耦：卡片大小/位置变化不影响入口位置
+ *   - safe-area-inset 适配刘海屏 / 圆角屏，避免被系统 UI 遮挡
+ *   - z-index 高于卡片，确保始终可点
  *   - 仿 iOS 控制中心的"功能集合"形态：竖向堆叠，节省横向空间
- *   - 整体绝对定位锚在 scene-card 右上角，与卡片 padding 拉开适当距离
  *   - 单个图标 button 完全裸露样式，仅 SVG + hover/active 微反馈
  *   - aria-label / title 提供语义；纯图标依赖排列顺序提供功能预期
  */
 .menu-icon-stack {
-  position: absolute;
-  top: 14px;
-  right: 14px;
+  position: fixed;
+  top: max(14px, env(safe-area-inset-top));
+  right: max(14px, env(safe-area-inset-right));
   display: flex;
   flex-direction: column;
   gap: 8px;
-  /* 不阻挡卡片自身点击；按钮自己会接收事件 */
+  /* 不阻挡背景点击；按钮自己会接收事件 */
   pointer-events: none;
-  /* 提层级，确保盖在卡片背景之上、不被任何 transform 子层挡住 */
-  z-index: 1;
+  /* 高于 scene-card（卡片自身无 z-index，进入栈即默认 0） */
+  z-index: 5;
 }
 .menu-icon-stack > * {
   pointer-events: auto;

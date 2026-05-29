@@ -139,60 +139,65 @@ export function showMainMenu(handlers: {
     btnGroup.appendChild(playBtn);
     btnGroup.appendChild(selectBtn);
     card.appendChild(btnGroup);
-
-    // === 右上角竖向图标条：4 个次要功能入口 ===
-    // 顺序遵循"个性化 → 数据 → 社交"递进，让最常用的"基础设置"在最上面
-    //   1. 基础设置（齿轮）
-    //   2. 同步数据（云）
-    //   3. 排行榜（奖杯）
-    //   4. 分享（节点连线）
-    const stack = document.createElement('div');
-    stack.className = 'menu-icon-stack';
-
-    stack.appendChild(
-      makeIconBtn(
-        '基础设置',
-        // Feather settings：齿轮
-        `<circle cx="12" cy="12" r="3"></circle>
-         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>`,
-        handlers.onBasicSettings
-      )
-    );
-
-    stack.appendChild(
-      makeIconBtn(
-        '同步数据',
-        // Feather cloud：云朵
-        `<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path>`,
-        handlers.onSyncData
-      )
-    );
-
-    stack.appendChild(
-      makeIconBtn(
-        '排行榜',
-        // Feather award 简化：奖杯
-        `<circle cx="12" cy="8" r="6"></circle>
-         <path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"></path>`,
-        handlers.onLeaderboard
-      )
-    );
-
-    stack.appendChild(
-      makeIconBtn(
-        '分享游戏',
-        // Feather share-2：三个圆 + 连线
-        `<circle cx="18" cy="5" r="3"></circle>
-         <circle cx="6" cy="12" r="3"></circle>
-         <circle cx="18" cy="19" r="3"></circle>
-         <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
-         <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>`,
-        () => showShareDialog()
-      )
-    );
-
-    card.appendChild(stack);
   };
+
+  // === 屏幕右上角竖向图标条：4 个次要功能入口 ===
+  // 顺序遵循"个性化 → 数据 → 社交"递进，让最常用的"基础设置"在最上面
+  //   1. 基础设置（齿轮）
+  //   2. 同步数据（云）
+  //   3. 排行榜（奖杯）
+  //   4. 分享（节点连线）
+  //
+  // 挂在 scene 而非 card 内：
+  //   - 视觉锚定到屏幕右上角（safe-area-inset 适配刘海屏），与卡片解耦
+  //   - 卡片大小/位置变化不影响入口位置
+  //   - 创建一次即可，不随 storage 变更重建（图标行为固定）
+  const stack = document.createElement('div');
+  stack.className = 'menu-icon-stack';
+
+  stack.appendChild(
+    makeIconBtn(
+      '基础设置',
+      // Feather settings：齿轮
+      `<circle cx="12" cy="12" r="3"></circle>
+       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>`,
+      handlers.onBasicSettings
+    )
+  );
+
+  stack.appendChild(
+    makeIconBtn(
+      '同步数据',
+      // Feather cloud：云朵
+      `<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path>`,
+      handlers.onSyncData
+    )
+  );
+
+  stack.appendChild(
+    makeIconBtn(
+      '排行榜',
+      // Feather award 简化：奖杯
+      `<circle cx="12" cy="8" r="6"></circle>
+       <path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"></path>`,
+      handlers.onLeaderboard
+    )
+  );
+
+  stack.appendChild(
+    makeIconBtn(
+      '分享游戏',
+      // Feather share-2：三个圆 + 连线
+      `<circle cx="18" cy="5" r="3"></circle>
+       <circle cx="6" cy="12" r="3"></circle>
+       <circle cx="18" cy="19" r="3"></circle>
+       <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+       <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>`,
+      () => showShareDialog()
+    )
+  );
+
+  scene.appendChild(stack);
 
   renderCard();
   showOverlay(scene);
