@@ -2230,13 +2230,24 @@ body {
  * 与音量滑块行复用 .settings-row 骨架，但把 input + 保存按钮排成一排。
  * 输入框需要解除全局 user-select:none。
  */
+/*
+ * 昵称设置行：label / input / 保存按钮 三栏布局。
+ * 默认 .settings-row 是 space-between + flex，这里通过 flex-wrap 让按钮在
+ * 极窄屏幕换行；input 用 flex:1 + 较大 min-width，确保至少有 12 字（约 200px）
+ * 的可视空间，避免输入到一半就看不见前文。
+ */
 .settings-nick-row {
   flex-wrap: wrap;
 }
+.settings-nick-row > label {
+  /* 让 label 紧凑，把空间让给 input */
+  flex: 0 0 auto;
+}
 .settings-nick-input {
-  flex: 1;
-  min-width: 0;
-  padding: 8px 12px;
+  flex: 1 1 220px;
+  /* 关键：让 input 能撑满剩余空间，且至少 200px 显示完整 12 字昵称 */
+  min-width: 200px;
+  padding: 8px 14px;
   font-family: inherit;
   font-size: 13px;
   background: rgba(58, 52, 43, 0.04);
