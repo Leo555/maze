@@ -53,9 +53,13 @@ export default defineConfig(({ mode }) => {
       },
     },
     esbuild: {
-      // 生产环境去掉所有 console.* 调试日志（保留 console.error 用于线上排错）
+      // 生产环境去掉所有 debugger 与非 error 的 console.* 调试日志（保留 console.error 用于线上排错）。
+      // 用 pure 而不是 drop 是为了：函数调用作为表达式时若结果未使用就被消除，
+      // 同时不会移除 `if (console.error(...))` 这种带副作用的语句。
       drop: isProd ? ['debugger'] : [],
-      pure: isProd ? ['console.log', 'console.debug', 'console.info'] : [],
+      pure: isProd
+        ? ['console.log', 'console.debug', 'console.info', 'console.warn', 'console.trace']
+        : [],
       // 不输出版权注释（howler 的 LICENSE 注释等），节省字节
       legalComments: 'none',
     },

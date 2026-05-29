@@ -26,7 +26,7 @@ import {
   markActive,
   ensureFirstSeen,
 } from './_lib/kv.js';
-import { checkWriteRate, commitWriteSession } from './_lib/ratelimit.js';
+import { checkWriteRate, commitWriteSession, acquireWriteLock } from './_lib/ratelimit.js';
 import { normalizeSave, isValidCode } from '../shared/types.js';
 
 const MAX_UNLOCK_DELTA = 5;
@@ -81,13 +81,26 @@ export default async function handler(
   }
 
   // 反作弊：相比云端 unlocked 增量不能超过 5
-  const current = await getProgress(code);
-  if (current && incoming.unlocked > current.unlocked + MAX_UNLOCK_DELTA) {
-    json(res, 400, { error: 'unlock_delta_too_large' });
+  // 关键：getProgress → 校验 → setProgress 必须在同一互斥锁内，
+  // 否则两个并发 save 都读到旧 unlocked、都通过校验、都写入 → 累计 +10 绕过限制
+  const lock = await acquireWriteLock(code);
+  if (!lock.ok) {
+    // 同一 code 已有另一次 save 在进行 → 当作过快提交
+    json(res, 429, { error: 'too_fast', retryAfterSec: 2 });
     return;
   }
 
-  await setProgress(code, incoming);
+  try {
+    const current = await getProgress(code);
+    if (current && incoming.unlocked > current.unlocked + MAX_UNLOCK_DELTA) {
+      json(res, 400, { error: 'unlock_delta_too_large' });
+      return;
+    }
+
+    await setProgress(code, incoming);
+  } finally {
+    await lock.release();
+  }
 
   // 更新会话锚点：必须在 setProgress 成功后，避免把同一玩家的连续 save
   // 误判为多端并发

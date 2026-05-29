@@ -165,3 +165,57 @@ export async function commitWriteSession(
     // sess 写入失败不影响主流程
   }
 }
+
+// ============================================================
+// 写互斥锁（防 TOCTOU）
+// ============================================================
+
+/** 单次 save 的临界区最大持续时间（秒）；包含 getProgress + 校验 + setProgress */
+const WRITE_LOCK_TTL_SEC = 5;
+
+/**
+ * 抢同一 code 的写入互斥锁。
+ *
+ * 防御场景：
+ *   并发两次 save（A 与 B）几乎同时到达，都先 getProgress 拿到 unlocked=10，
+ *   都通过 unlock_delta_too_large 校验（incoming.unlocked=15 ≤ 10+5），
+ *   都写入 → 攻击者用两次并发提交即可在云端把 unlocked 从 10 推到 20，
+ *   绕过单次 +5 的限制。
+ *
+ * 实现：用 KV 的 SET NX 做分布式互斥锁。同一 code 同时只能有一次 save 在临界区内。
+ *
+ * KV 异常处理：fail-open（拿锁失败照样放行）。理由：
+ *   - KV 真挂了时正常玩家通关 100% 受影响；攻击者刚好抓住 KV 抖动窗口的概率极低
+ *   - 多端并发与 unlock 增量校验在 KV 正常时已能挡住绝大多数滥用
+ *   - 把锁做成强制，会把 KV 抖动放大成"全员无法保存"的故障
+ *
+ * 用法：
+ *   const release = await acquireWriteLock(code);
+ *   try { ... 临界区 ... } finally { await release(); }
+ */
+export async function acquireWriteLock(
+  code: string
+): Promise<{ ok: boolean; release: () => Promise<void> }> {
+  const key = `lock:save:${code}`;
+  try {
+    // SET NX EX：仅当 key 不存在时才设置，TTL 5s 自动兜底防死锁
+    const got = await kv.set(key, '1', { nx: true, ex: WRITE_LOCK_TTL_SEC });
+    if (got) {
+      return {
+        ok: true,
+        release: async () => {
+          try {
+            await kv.del(key);
+          } catch {
+            /* 失败也无所谓，TTL 会兜底 */
+          }
+        },
+      };
+    }
+    // 拿不到锁 → 当前 code 有另一次 save 进行中
+    return { ok: false, release: async () => {} };
+  } catch {
+    // KV 异常：fail-open，放行但不持锁
+    return { ok: true, release: async () => {} };
+  }
+}

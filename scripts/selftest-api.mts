@@ -420,6 +420,127 @@ async function main(): Promise<void> {
     ok('sync 不存在 → 404', res.statusCode === 404);
   }
 
+  // ---------- 反作弊：unlock_delta TOCTOU 互斥锁 ----------
+  // 模拟两个并发 save：第一个还在临界区里时，第二个必须被锁拒绝
+  console.log('\n=== Anti-cheat: unlock_delta + write lock ===');
+  {
+    const code3 = 'kPmR3gT5';
+    // 先写入一个已有进度（unlocked=2）。注意 save 内部有限流（30s 最小间隔），
+    // 所以接下来用 code3 第二次正常写已经会被 too_fast 拦——为此我们用不同 IP+UA 避免
+    // 多端并发判定，并直接清掉 sess 锚来绕过 L1 频率限制以测互斥锁本身。
+    {
+      const r = makeRes();
+      await saveH(
+        makeReq({
+          method: 'POST',
+          url: '/api/save',
+          ip: '10.0.0.10',
+          body: { code: code3, progress: { v: 1, unlocked: 2, records: {} } },
+        }),
+        r
+      );
+      ok('初始 save unlocked=2 → 200', r.statusCode === 200);
+    }
+    // 清 sess 锚 + L2 burst 计数 + L3 IP 集合，避免影响后续测试
+    kvState.store.delete(`sess:${code3}`);
+    kvState.store.delete(`rl:save:burst:${code3}`);
+    kvState.sets.delete('rl:save:ip:10.0.0.10');
+
+    // 模拟"持锁中"：手动 SET NX 占据锁
+    kvState.store.set(`lock:save:${code3}`, '1');
+    {
+      const r = makeRes();
+      await saveH(
+        makeReq({
+          method: 'POST',
+          url: '/api/save',
+          ip: '10.0.0.10',
+          body: { code: code3, progress: { v: 1, unlocked: 3, records: {} } },
+        }),
+        r
+      );
+      ok('并发同 code → 锁占据时返回 429 too_fast', r.statusCode === 429);
+      const body = parseJson(r) as { error?: string };
+      ok('错误码=too_fast', body.error === 'too_fast');
+    }
+    kvState.store.delete(`lock:save:${code3}`);
+
+    // 越权 unlock 增量：current=2，incoming=10 → 5 阈值不允许
+    kvState.store.delete(`sess:${code3}`);
+    {
+      const r = makeRes();
+      await saveH(
+        makeReq({
+          method: 'POST',
+          url: '/api/save',
+          ip: '10.0.0.10',
+          body: { code: code3, progress: { v: 1, unlocked: 10, records: {} } },
+        }),
+        r
+      );
+      ok('unlock 跳跃 +8 → 400 unlock_delta_too_large', r.statusCode === 400);
+    }
+    // 校验：失败后锁必须已释放（否则下一次 save 会卡死）
+    ok(
+      'unlock 校验失败后锁已释放',
+      !kvState.store.has(`lock:save:${code3}`)
+    );
+  }
+
+  // ---------- 反作弊：normalizeSave 字段校验 ----------
+  // 通过 save 接口注入脏数据，验证后端会丢弃非法 records 与钳制非法 stars
+  console.log('\n=== Anti-cheat: normalizeSave 字段校验 ===');
+  {
+    const code4 = 'kPmR3gT6';
+    // 清残留状态
+    kvState.store.delete(`sess:${code4}`);
+    kvState.store.delete(`rl:save:burst:${code4}`);
+    {
+      const r = makeRes();
+      await saveH(
+        makeReq({
+          method: 'POST',
+          url: '/api/save',
+          ip: '10.0.0.20',
+          body: {
+            code: code4,
+            progress: {
+              v: 1,
+              unlocked: 3,
+              records: {
+                // 合法记录
+                '1': { bestTime: 12.5, bestStars: 3, cleared: true },
+                // 异常 stars=999 → 被钳制为 3
+                '2': { bestTime: 20, bestStars: 999, cleared: true },
+                // bestTime 为 NaN → 整条丢弃
+                '3': { bestTime: NaN, bestStars: 2, cleared: true },
+                // bestTime 超大（10 小时）→ 整条丢弃
+                '4': { bestTime: 36000, bestStars: 1, cleared: true },
+                // levelId 越界 → 整条丢弃
+                '999': { bestTime: 5, bestStars: 3, cleared: true },
+                // 字符串 bestTime → 整条丢弃
+                '5': { bestTime: 'fast', bestStars: 3, cleared: true },
+              },
+            },
+          },
+        }),
+        r
+      );
+      ok('注入脏数据 save → 200', r.statusCode === 200);
+      const body = parseJson(r) as {
+        progress?: { records?: Record<string, { bestStars: number; bestTime: number }> };
+      };
+      const recs = body.progress?.records ?? {};
+      ok('合法记录保留（id=1）', !!recs['1']);
+      ok('id=1 stars=3', recs['1']?.bestStars === 3);
+      ok('id=2 stars 被钳制到 3', recs['2']?.bestStars === 3);
+      ok('id=3 NaN bestTime → 丢弃', !recs['3']);
+      ok('id=4 超大 bestTime → 丢弃', !recs['4']);
+      ok('id=999 越界 → 丢弃', !recs['999']);
+      ok('id=5 字符串 bestTime → 丢弃', !recs['5']);
+    }
+  }
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 }

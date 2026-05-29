@@ -39,20 +39,67 @@ export interface SaveData {
   unlocked: number;
 }
 
-/** 把任意来源的对象规范化为 SaveData（兜底字段，向后兼容） */
+/** 关卡总数（与 config/levels.ts 的 TOTAL_LEVELS 保持一致；shared 不依赖 src 因此独立常量） */
+const MAX_LEVEL_ID = 100;
+/** 单关合理时间上限：3 小时；超过视为脏数据（防止 NaN/Infinity/恶意大值污染速通榜） */
+const MAX_BEST_TIME_SEC = 3 * 60 * 60;
+
+/**
+ * 把任意来源的对象规范化为 SaveData。
+ *
+ * 反作弊兜底（非常重要）：
+ *   - records 内每条记录都做严格类型 + 范围校验，脏值整条丢弃
+ *   - bestStars 钳制到 0..3
+ *   - bestTime 必须是有限非负数且不超过 MAX_BEST_TIME_SEC
+ *   - levelId 必须是 1..100 整数
+ *   - unlocked 钳制到 1..MAX_LEVEL_ID + 1（最多解锁到"下一关 = 全通后状态"）
+ *
+ * 这是后端反作弊的最后一道防线（save 的 unlock_delta 检查只能挡住跨提交的"跳级"，
+ * 挡不住单次提交里 records 字段被注入恶意数值——例如 bestStars: 999 会污染综合榜分数）。
+ */
 export function normalizeSave(raw: unknown, currentVersion = 1): SaveData | null {
   if (!raw || typeof raw !== 'object') return null;
   const obj = raw as Partial<SaveData>;
+
+  // unlocked：必须是 1..MAX_LEVEL_ID+1 的整数
+  let unlocked = 1;
+  if (typeof obj.unlocked === 'number' && Number.isFinite(obj.unlocked)) {
+    unlocked = Math.max(1, Math.min(MAX_LEVEL_ID + 1, Math.floor(obj.unlocked)));
+  }
+
+  // records：逐条严格校验，任何字段不合法则整条丢弃
+  const cleanRecords: Record<number, LevelRecord> = {};
+  if (obj.records && typeof obj.records === 'object') {
+    const src = obj.records as Record<string, unknown>;
+    for (const k of Object.keys(src)) {
+      const id = Number(k);
+      if (!Number.isInteger(id) || id < 1 || id > MAX_LEVEL_ID) continue;
+      const r = src[k];
+      if (!r || typeof r !== 'object') continue;
+      const rec = r as Partial<LevelRecord>;
+      if (
+        typeof rec.bestTime !== 'number' ||
+        !Number.isFinite(rec.bestTime) ||
+        rec.bestTime < 0 ||
+        rec.bestTime > MAX_BEST_TIME_SEC
+      ) {
+        continue;
+      }
+      if (typeof rec.bestStars !== 'number' || !Number.isFinite(rec.bestStars)) {
+        continue;
+      }
+      cleanRecords[id] = {
+        bestTime: rec.bestTime,
+        bestStars: Math.max(0, Math.min(3, Math.floor(rec.bestStars))),
+        cleared: rec.cleared === true,
+      };
+    }
+  }
+
   return {
     v: currentVersion,
-    records:
-      obj.records && typeof obj.records === 'object'
-        ? (obj.records as Record<number, LevelRecord>)
-        : {},
-    unlocked:
-      typeof obj.unlocked === 'number' && obj.unlocked >= 1
-        ? Math.floor(obj.unlocked)
-        : 1,
+    records: cleanRecords,
+    unlocked,
   };
 }
 

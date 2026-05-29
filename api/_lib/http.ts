@@ -46,7 +46,7 @@ function getAllowList(): string[] {
  *   - 该校验对抗"第三方网站用浏览器嵌 iframe / fetch 偷调"等场景（浏览器无法伪造 Origin/Referer）
  *   - 但无法对抗 curl / Postman / 脚本（这些工具可以伪造或省略所有头）
  *     真正抵御脚本攻击的是：
- *       a) 8 位 code 不可猜（crypto 随机 + 32^8 ≈ 1.1 万亿空间）
+ *       a) 8 位 code 不可猜（crypto 随机 + 56^8 ≈ 9.6 万亿空间）
  *       b) IP+code 维度限流
  *       c) unlocked 增量 ≤ 5 的反作弊
  *
