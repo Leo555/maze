@@ -4,6 +4,7 @@
  * 路由表：
  *   #/             → menu          主菜单
  *   #/levels       → levels        关卡选择
+ *   #/leaderboard  → leaderboard   排行榜
  *   #/settings     → settings      设置
  *   #/play/:id     → play          进入指定关卡
  *
@@ -16,6 +17,7 @@
 export type Route =
   | { name: 'menu' }
   | { name: 'levels' }
+  | { name: 'leaderboard' }
   | { name: 'settings' }
   | { name: 'play'; levelId: number };
 
@@ -93,6 +95,8 @@ function parseHash(hash: string): Route {
   switch (parts[0]) {
     case 'levels':
       return { name: 'levels' };
+    case 'leaderboard':
+      return { name: 'leaderboard' };
     case 'settings':
       return { name: 'settings' };
     case 'play': {
@@ -112,6 +116,8 @@ function serializeHash(route: Route): string {
       return '#/';
     case 'levels':
       return '#/levels';
+    case 'leaderboard':
+      return '#/leaderboard';
     case 'settings':
       return '#/settings';
     case 'play':

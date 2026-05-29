@@ -172,6 +172,9 @@ export class Game {
       case 'levels':
         this.renderLevelSelect();
         break;
+      case 'leaderboard':
+        this.renderLeaderboard();
+        break;
       case 'settings':
         this.renderSettings();
         break;
@@ -211,6 +214,7 @@ export class Game {
         router.navigate({ name: 'play', levelId });
       },
       onSelectLevel: () => router.navigate({ name: 'levels' }),
+      onLeaderboard: () => router.navigate({ name: 'leaderboard' }),
       onSettings: () => router.navigate({ name: 'settings' }),
     });
   }
@@ -247,6 +251,19 @@ export class Game {
     this.cleanupLevel();
     this.hud.hide();
     showSettings(() => router.navigate({ name: 'menu' }));
+  }
+
+  /**
+   * 渲染排行榜页：动态加载排行榜模块（首屏不打包，按需 chunk）。
+   * 与 settings 一样视作 menu 态：清掉关卡数据，避免在游戏中误进。
+   */
+  private renderLeaderboard(): void {
+    this.state = 'menu';
+    this.cleanupLevel();
+    this.hud.hide();
+    void import('../ui/overlays/Leaderboard').then(({ showLeaderboard }) => {
+      showLeaderboard(() => router.navigate({ name: 'menu' }));
+    });
   }
 
   /** 清理当前关卡上下文，回菜单/换关时调用 */

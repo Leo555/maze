@@ -59,6 +59,7 @@ function computeProgress(): {
 export function showMainMenu(handlers: {
   onPlay: (levelId: number) => void;
   onSelectLevel: () => void;
+  onLeaderboard: () => void;
   onSettings: () => void;
 }): void {
   audio.playBgm('bgm_menu', 800);
@@ -130,6 +131,12 @@ export function showMainMenu(handlers: {
     attachClickSfx(selectBtn);
     selectBtn.onclick = () => handlers.onSelectLevel();
 
+    const lbBtn = document.createElement('button');
+    lbBtn.className = 'btn';
+    lbBtn.textContent = '排 行 榜';
+    attachClickSfx(lbBtn);
+    lbBtn.onclick = () => handlers.onLeaderboard();
+
     const settingsBtn = document.createElement('button');
     settingsBtn.className = 'btn';
     settingsBtn.textContent = '设  置';
@@ -138,6 +145,7 @@ export function showMainMenu(handlers: {
 
     btnGroup.appendChild(playBtn);
     btnGroup.appendChild(selectBtn);
+    btnGroup.appendChild(lbBtn);
     btnGroup.appendChild(settingsBtn);
     card.appendChild(btnGroup);
 
