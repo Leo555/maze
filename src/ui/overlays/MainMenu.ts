@@ -141,14 +141,15 @@ export function showMainMenu(handlers: {
     `;
 
     // 欢迎语：仅在玩家设置过昵称时显示。
-    // 放在副标题与进度行之间，作为"个人化"标识；无昵称时保持原视觉不变。
+    // 紧贴在主标题下方、副标题之上，作为"这是你的迷径"的个人化归属感标签。
     // 用 textContent 写入，天然防止昵称中的特殊字符（如 <、&）破坏 DOM 或触发 XSS。
     const greeting = buildGreeting(progress);
     if (greeting) {
+      const titleEl = card.querySelector('.scene-title');
       const g = document.createElement('div');
       g.className = 'scene-greeting';
       g.textContent = greeting;
-      card.appendChild(g);
+      titleEl?.insertAdjacentElement('afterend', g);
     }
 
     // 进度行

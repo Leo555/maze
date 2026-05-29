@@ -443,10 +443,16 @@ body {
   text-overflow: ellipsis;
 }
 
-/* 主菜单欢迎语：玩家设置昵称后才显示，作为个人化标识 */
+/*
+ * 主菜单欢迎语：玩家设置昵称后才显示，作为个人化标识。
+ * 位置：紧贴在主标题下方、副标题之上，是"这是你的迷径"的归属感标签。
+ *
+ * 间距策略：
+ *   .scene-title 默认 margin-bottom 10px，欢迎语用负 margin-top 收紧到 ~2px，
+ *   与 title 形成"主标题 + 称呼语"的紧密视觉组合；下方留 8px 与副标题分开。
+ */
 .scene-greeting {
-  /* 紧贴在副标题下方，与进度行有视觉分组 */
-  margin: -8px 0 20px;
+  margin: -2px 0 8px;
   font-size: 13px;
   letter-spacing: 2px;
   color: var(--accent, var(--text-soft));
@@ -826,11 +832,11 @@ body {
 
 /*
  * 结算 / 失败页的昵称称呼。
- * 紧贴在副标题下方，作为"个人化"标识；与主菜单的 .scene-greeting 视觉风格保持一致，
- * 但因结算卡内容更紧凑，间距与字号更小一档。
+ * 位置：紧贴在主标题下方、副标题之上，与主菜单 .scene-greeting 视觉布局一致。
+ * 因结算卡内容更紧凑，间距更小一档。
  */
 .result-greeting {
-  margin: 4px 0 12px;
+  margin: -2px 0 6px;
   font-size: 12px;
   letter-spacing: 2px;
   color: var(--accent, var(--text-soft));

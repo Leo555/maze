@@ -77,15 +77,16 @@ export function showResult(
     </div>
   `;
 
-  // 昵称称呼：插入到副标题与星星行之间，用 textContent 防昵称中的特殊字符破坏 DOM。
-  // 与主菜单欢迎语形成呼应——玩家从命名到通关全程被"看见"。
+  // 昵称称呼：插入到主标题与副标题之间，与主菜单 .scene-greeting 位置保持一致，
+  // 用 textContent 防昵称中的特殊字符破坏 DOM。
+  // 玩家从命名 → 进入 → 通关全程都被"看见"，形成连贯的个人化体验。
   const greeting = buildResultGreeting(data.stars, storage.getNick());
   if (greeting) {
-    const subtitle = card.querySelector('.scene-subtitle');
+    const titleEl = card.querySelector('.scene-title');
     const g = document.createElement('div');
     g.className = 'result-greeting';
     g.textContent = greeting;
-    subtitle?.insertAdjacentElement('afterend', g);
+    titleEl?.insertAdjacentElement('afterend', g);
   }
 
   const btnGroup = document.createElement('div');
@@ -171,13 +172,14 @@ export function showFail(
   `;
 
   // 失败页也显示昵称鼓励：失败时玩家心理压力较高，加一句轻量称呼能软化打击。
+  // 位置与通关页保持一致——主标题下方、副标题（失败原因）之上。
   const nick = storage.getNick();
   if (nick) {
-    const subtitle = card.querySelector('.scene-subtitle');
+    const titleEl = card.querySelector('.scene-title');
     const g = document.createElement('div');
     g.className = 'result-greeting';
     g.textContent = `别 灰 心 · ${nick}`;
-    subtitle?.insertAdjacentElement('afterend', g);
+    titleEl?.insertAdjacentElement('afterend', g);
   }
   const btnGroup = document.createElement('div');
   btnGroup.className = 'btn-group';
