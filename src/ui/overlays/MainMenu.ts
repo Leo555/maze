@@ -90,8 +90,9 @@ export function showMainMenu(handlers: {
   const scene = document.createElement('div');
   scene.className = 'scene';
 
-  // 顶部 header：欢迎语 + 进度提示（贴在 scene 顶部红框区域）
-  attachSceneHeader(scene, { greeting: { kind: 'menu' } });
+  // 顶部 header：仅显示欢迎语；进度信息在卡片内的「继续 · X」按钮已经表达，
+  // header 再列一遍"下一关 / 已通关 / 星数"会信息冗余，故关闭进度行
+  attachSceneHeader(scene, { greeting: { kind: 'menu' }, showProgress: false });
 
   const card = document.createElement('div');
   card.className = 'scene-card';
