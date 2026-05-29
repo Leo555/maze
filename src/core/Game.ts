@@ -29,7 +29,8 @@ import {
   showPauseMenu,
   showMainMenu,
   showLevelSelect,
-  showSettings,
+  showBasicSettings,
+  showSyncData,
   showOptimalReview,
   hideOverlay,
 } from '../ui/Overlays';
@@ -172,11 +173,11 @@ export class Game {
       case 'levels':
         this.renderLevelSelect();
         break;
-      case 'leaderboard':
-        this.renderLeaderboard();
+      case 'basicSettings':
+        this.renderBasicSettings();
         break;
-      case 'settings':
-        this.renderSettings();
+      case 'syncData':
+        this.renderSyncData();
         break;
       case 'play': {
         // 校验关卡是否存在 / 已解锁，否则回到主菜单
@@ -214,15 +215,20 @@ export class Game {
         router.navigate({ name: 'play', levelId });
       },
       onSelectLevel: () => router.navigate({ name: 'levels' }),
-      onLeaderboard: () => router.navigate({ name: 'leaderboard' }),
-      onSettings: () => router.navigate({ name: 'settings' }),
+      // 排行榜是独立 HTML 页面 /leaderboard（独立 bundle、SEO 友好），
+      // 这里直接跳转，不走 SPA 路由
+      onLeaderboard: () => {
+        location.href = '/leaderboard';
+      },
+      onBasicSettings: () => router.navigate({ name: 'basicSettings' }),
+      onSyncData: () => router.navigate({ name: 'syncData' }),
     });
   }
 
   private renderLevelSelect(): void {
     // 关键：不能 cleanupLevel！如果用户从游戏内进入选关页，关卡数据需要保留，
     // 这样「返回游戏」才能继续玩；「选其它关」时由 startLevel 自然替换。
-    // 仅切到 'menu' / 'settings' 时才需要清理。
+    // 仅切到 menu / 基础设置 / 同步数据 时才需要清理。
     const inGame = this.level !== null && this.state !== 'transition';
     if (inGame) {
       // 游戏中暂时进入选关页：状态视作 paused，玩家不会继续移动
@@ -246,24 +252,18 @@ export class Game {
     });
   }
 
-  private renderSettings(): void {
+  private renderBasicSettings(): void {
     this.state = 'menu';
     this.cleanupLevel();
     this.hud.hide();
-    showSettings(() => router.navigate({ name: 'menu' }));
+    showBasicSettings(() => router.navigate({ name: 'menu' }));
   }
 
-  /**
-   * 渲染排行榜页：动态加载排行榜模块（首屏不打包，按需 chunk）。
-   * 与 settings 一样视作 menu 态：清掉关卡数据，避免在游戏中误进。
-   */
-  private renderLeaderboard(): void {
+  private renderSyncData(): void {
     this.state = 'menu';
     this.cleanupLevel();
     this.hud.hide();
-    void import('../ui/overlays/Leaderboard').then(({ showLeaderboard }) => {
-      showLeaderboard(() => router.navigate({ name: 'menu' }));
-    });
+    showSyncData(() => router.navigate({ name: 'menu' }));
   }
 
   /** 清理当前关卡上下文，回菜单/换关时调用 */

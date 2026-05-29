@@ -1,5 +1,11 @@
 /**
- * 主菜单：标题 + 进度概览 + 三个按钮（开始/选关/设置）。
+ * 主菜单：标题 + 进度概览 + 2 个按钮（开始/选关） + 右上角竖向 4 个图标。
+ *
+ * 设计原则：
+ *   - 主按钮组只保留"开始游戏"和"选择关卡"两个最高频操作，视觉清爽
+ *   - 其他功能（基础设置 / 同步数据 / 排行榜 / 分享）做成右上角竖向图标条，
+ *     仿照 iOS 控制中心的"功能集合"形态，节省横向空间又给每个功能独立入口
+ *   - 不做"更多 ⋯ 菜单"折叠：单层操作直达比两次点击体验好
  *
  * 订阅 storage 变更：云端 bootstrap 晚到时自动刷新菜单文案与进度数。
  */
@@ -56,11 +62,38 @@ function computeProgress(): {
   };
 }
 
+/**
+ * 创建一个右上角竖条图标按钮。
+ *
+ * 抽成函数避免 4 段重复 DOM 创建逻辑。SVG 用 currentColor 跟随主题；
+ * aria-label / title 提供语义；无文字标签纯图标，依赖排列顺序提供功能预期。
+ */
+function makeIconBtn(
+  label: string,
+  svgInner: string,
+  onClick: () => void
+): HTMLButtonElement {
+  const btn = document.createElement('button');
+  btn.className = 'menu-icon-btn';
+  btn.type = 'button';
+  btn.setAttribute('aria-label', label);
+  btn.title = label;
+  btn.innerHTML = `
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      ${svgInner}
+    </svg>
+  `;
+  attachClickSfx(btn);
+  btn.onclick = onClick;
+  return btn;
+}
+
 export function showMainMenu(handlers: {
   onPlay: (levelId: number) => void;
   onSelectLevel: () => void;
   onLeaderboard: () => void;
-  onSettings: () => void;
+  onBasicSettings: () => void;
+  onSyncData: () => void;
 }): void {
   audio.playBgm('bgm_menu', 800);
   audio.playSfx('ui_open');
@@ -108,6 +141,7 @@ export function showMainMenu(handlers: {
     }
     card.appendChild(progressEl);
 
+    // 主按钮组：仅 2 个最高频操作（开始 / 选关）
     const btnGroup = document.createElement('div');
     btnGroup.className = 'btn-group';
 
@@ -131,43 +165,62 @@ export function showMainMenu(handlers: {
     attachClickSfx(selectBtn);
     selectBtn.onclick = () => handlers.onSelectLevel();
 
-    const lbBtn = document.createElement('button');
-    lbBtn.className = 'btn';
-    lbBtn.textContent = '排 行 榜';
-    attachClickSfx(lbBtn);
-    lbBtn.onclick = () => handlers.onLeaderboard();
-
-    const settingsBtn = document.createElement('button');
-    settingsBtn.className = 'btn';
-    settingsBtn.textContent = '设  置';
-    attachClickSfx(settingsBtn);
-    settingsBtn.onclick = () => handlers.onSettings();
-
     btnGroup.appendChild(playBtn);
     btnGroup.appendChild(selectBtn);
-    btnGroup.appendChild(lbBtn);
-    btnGroup.appendChild(settingsBtn);
     card.appendChild(btnGroup);
 
-    // 分享按钮：卡片右上角图标（次要操作，不抢主按钮的视觉焦点）
-    // 仅图标，aria-label / title 提供语义；SVG 用 currentColor 跟随主题色
-    const shareBtn = document.createElement('button');
-    shareBtn.className = 'menu-icon-btn menu-share-btn';
-    shareBtn.type = 'button';
-    shareBtn.setAttribute('aria-label', '分享游戏');
-    shareBtn.title = '分享游戏';
-    shareBtn.innerHTML = `
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <circle cx="18" cy="5" r="3"></circle>
-        <circle cx="6" cy="12" r="3"></circle>
-        <circle cx="18" cy="19" r="3"></circle>
-        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
-        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
-      </svg>
-    `;
-    attachClickSfx(shareBtn);
-    shareBtn.onclick = () => showShareDialog();
-    card.appendChild(shareBtn);
+    // === 右上角竖向图标条：4 个次要功能入口 ===
+    // 顺序遵循"个性化 → 数据 → 社交"递进，让最常用的"基础设置"在最上面
+    //   1. 基础设置（齿轮）
+    //   2. 同步数据（云）
+    //   3. 排行榜（奖杯）
+    //   4. 分享（节点连线）
+    const stack = document.createElement('div');
+    stack.className = 'menu-icon-stack';
+
+    stack.appendChild(
+      makeIconBtn(
+        '基础设置',
+        // Feather settings：齿轮
+        `<circle cx="12" cy="12" r="3"></circle>
+         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>`,
+        handlers.onBasicSettings
+      )
+    );
+
+    stack.appendChild(
+      makeIconBtn(
+        '同步数据',
+        // Feather cloud：云朵
+        `<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path>`,
+        handlers.onSyncData
+      )
+    );
+
+    stack.appendChild(
+      makeIconBtn(
+        '排行榜',
+        // Feather award 简化：奖杯
+        `<circle cx="12" cy="8" r="6"></circle>
+         <path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"></path>`,
+        handlers.onLeaderboard
+      )
+    );
+
+    stack.appendChild(
+      makeIconBtn(
+        '分享游戏',
+        // Feather share-2：三个圆 + 连线
+        `<circle cx="18" cy="5" r="3"></circle>
+         <circle cx="6" cy="12" r="3"></circle>
+         <circle cx="18" cy="19" r="3"></circle>
+         <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+         <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>`,
+        () => showShareDialog()
+      )
+    );
+
+    card.appendChild(stack);
   };
 
   renderCard();

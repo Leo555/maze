@@ -1,17 +1,23 @@
 /**
- * 设置页：昵称 + 音量滑块 + 重置存档 + 同步进度面板。
+ * 基础设置浮层：昵称 + 音量。
+ *
+ * 与原 Settings.ts 的关系：
+ *   原 settings 单页同时承载"昵称/音量/清存档/同步面板"，导致竖向尺寸过大、
+ *   且功能性质混杂。现拆为 BasicSettings + SyncData 两个独立浮层，
+ *   主菜单的"基础设置"和"同步数据"两个图标分别打开。
+ *
+ * 内容：
+ *   - 昵称：1-12 字，立刻 push 云端，失败用 PushErrorMessage 文案路由
+ *   - 主音量 / 音效 / 音乐：滑块，input 即时生效，change 时播放点击音
  */
 
 import { audio } from '../../core/Audio';
 import { storage } from '../../core/Storage';
 import { showToast } from '../Toast';
 import { attachClickSfx, showOverlay } from './shared';
-import { showConfirm } from './Confirm';
-import { buildSyncPanel } from './sync/SyncPanel';
 import { isValidNick, NICK_MAX_LENGTH } from '../../../shared/types';
-import { pushErrorMessage } from '../../core/PushErrorMessage';
 
-/** 把一段 UI 抽成函数：渲染昵称设置行 */
+/** 渲染昵称设置行 */
 function buildNicknameRow(): HTMLElement {
   const row = document.createElement('div');
   row.className = 'settings-row settings-nick-row';
@@ -69,7 +75,7 @@ function buildNicknameRow(): HTMLElement {
   return row;
 }
 
-export function showSettings(onBack: () => void): void {
+export function showBasicSettings(onBack: () => void): void {
   audio.playSfx('ui_open');
 
   const scene = document.createElement('div');
@@ -77,8 +83,8 @@ export function showSettings(onBack: () => void): void {
   const card = document.createElement('div');
   card.className = 'scene-card';
   card.innerHTML = `
-    <div class="scene-title">设  置</div>
-    <div class="scene-subtitle">SETTINGS</div>
+    <div class="scene-title">基 础 设 置</div>
+    <div class="scene-subtitle">PREFERENCES</div>
   `;
 
   // 昵称（最重要的"自定义"，放最上面）
@@ -111,50 +117,6 @@ export function showSettings(onBack: () => void): void {
     input.addEventListener('change', () => audio.playSfx('ui_click'));
     card.appendChild(row);
   }
-
-  // 重置存档
-  const resetRow = document.createElement('div');
-  resetRow.className = 'settings-row';
-  resetRow.innerHTML = `<label>存档</label>`;
-  const resetBtn = document.createElement('button');
-  resetBtn.className = 'btn';
-  resetBtn.style.flex = '1';
-  resetBtn.textContent = '清 除 通 关 记 录';
-  attachClickSfx(resetBtn);
-  resetBtn.onclick = async () => {
-    const confirmed = await showConfirm({
-      title: '清除通关记录',
-      message:
-        '此操作将清除所有关卡通关进度与三星记录，且不可恢复。\n请确认是否继续？',
-      confirmText: '确 定 清 除',
-      cancelText: '取  消',
-      danger: true,
-    });
-    if (!confirmed) return;
-
-    // 进度清除：云端写入成功才视为完成，避免云端旧数据下次启动覆盖本地
-    resetBtn.disabled = true;
-    const original = resetBtn.textContent;
-    resetBtn.textContent = '清 除 中...';
-    try {
-      const r = await storage.reset();
-      if (r.ok) {
-        showToast('已清除通关记录', 'success');
-      } else {
-        showToast(pushErrorMessage(r.error, r.retryAfterSec), 'error', 3000);
-      }
-    } catch {
-      showToast('清除失败，请稍后重试', 'error', 3000);
-    } finally {
-      resetBtn.disabled = false;
-      resetBtn.textContent = original;
-    }
-  };
-  resetRow.appendChild(resetBtn);
-  card.appendChild(resetRow);
-
-  // === 同步进度面板（云端关联状态 + 编号显示 + 输入码恢复） ===
-  card.appendChild(buildSyncPanel());
 
   const back = document.createElement('button');
   back.className = 'btn primary';

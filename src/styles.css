@@ -353,20 +353,43 @@ body {
   box-shadow: var(--shadow-card);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  /* relative：让卡片右上角的图标按钮（如分享 menu-share-btn）能绝对定位锚定 */
+  /* relative：让卡片右上角的 .menu-icon-stack 能绝对定位锚定 */
   position: relative;
 }
 
 /* 主菜单卡片右上角的图标按钮：视觉上仅是一个 SVG
  * 保留 <button> 标签是为了 a11y / 键盘可达；样式上完全裸露
  */
-.menu-icon-btn {
+/*
+ * 主菜单卡片右上角的竖向图标条：4 个次要功能入口（基础设置 / 同步数据 / 排行榜 / 分享）。
+ *
+ * 设计：
+ *   - 仿 iOS 控制中心的"功能集合"形态：竖向堆叠，节省横向空间
+ *   - 整体绝对定位锚在 scene-card 右上角，与卡片 padding 拉开适当距离
+ *   - 单个图标 button 完全裸露样式，仅 SVG + hover/active 微反馈
+ *   - aria-label / title 提供语义；纯图标依赖排列顺序提供功能预期
+ */
+.menu-icon-stack {
   position: absolute;
   top: 18px;
   right: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /* 不阻挡卡片自身点击；按钮自己会接收事件 */
+  pointer-events: none;
+}
+.menu-icon-stack > * {
+  pointer-events: auto;
+}
+
+/* 单个图标 button：纯 SVG，无背景边框，hover/active 微反馈 */
+.menu-icon-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 32px;
+  height: 32px;
   padding: 0;
   background: transparent;
   border: none;
@@ -374,18 +397,20 @@ body {
   color: var(--text-soft);
   font-family: inherit;
   cursor: pointer;
-  transition: color 0.15s, transform 0.1s;
+  transition: color 0.15s, transform 0.1s, background 0.15s;
   -webkit-tap-highlight-color: transparent;
-  /* 取消浏览器默认按钮 min-height */
+  border-radius: 8px;
   line-height: 0;
 }
-/* focus-visible：键盘聚焦时给一个低调的虚线提示，鼠标点击不显示 */
+/* focus-visible：键盘聚焦时让图标变深，鼠标点击不显示边框 */
 .menu-icon-btn:focus { outline: none; }
 .menu-icon-btn:focus-visible {
   color: var(--text);
+  background: rgba(58, 52, 43, 0.06);
 }
 .menu-icon-btn:hover {
   color: var(--text);
+  background: rgba(58, 52, 43, 0.06);
   transform: translateY(-1px);
 }
 .menu-icon-btn:active {
@@ -825,7 +850,7 @@ body {
   color: var(--text);
 }
 
-/* ========== 同步进度面板（设置页内） ========== */
+/* ========== 同步进度面板（同步数据页内） ========== */
 .settings-sync {
   margin-top: 18px;
   padding: 14px 16px;

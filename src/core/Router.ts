@@ -2,11 +2,17 @@
  * 极简 hash 路由
  *
  * 路由表：
- *   #/             → menu          主菜单
- *   #/levels       → levels        关卡选择
- *   #/leaderboard  → leaderboard   排行榜
- *   #/settings     → settings      设置
- *   #/play/:id     → play          进入指定关卡
+ *   #/                  → menu             主菜单
+ *   #/levels            → levels           关卡选择
+ *   #/basic-settings    → basicSettings    基础设置（昵称 + 音量）
+ *   #/sync-data         → syncData         同步数据（同步面板 + 清除存档）
+ *   #/play/:id          → play             进入指定关卡
+ *
+ * 历史：
+ *   - 曾有 #/settings 单页（昵称+音量+清存档+同步面板混在一起），
+ *     现拆分为 basic-settings + sync-data 两个独立浮层
+ *   - 曾有 #/leaderboard 浮层，现已改造为独立 HTML 页面 /leaderboard
+ *     （独立 bundle、SEO 友好），不再走 hash 路由
  *
  * 设计：
  *   - 仅用 location.hash，零依赖、刷新可恢复、支持浏览器前进后退
@@ -17,8 +23,8 @@
 export type Route =
   | { name: 'menu' }
   | { name: 'levels' }
-  | { name: 'leaderboard' }
-  | { name: 'settings' }
+  | { name: 'basicSettings' }
+  | { name: 'syncData' }
   | { name: 'play'; levelId: number };
 
 export class Router {
@@ -95,10 +101,10 @@ function parseHash(hash: string): Route {
   switch (parts[0]) {
     case 'levels':
       return { name: 'levels' };
-    case 'leaderboard':
-      return { name: 'leaderboard' };
-    case 'settings':
-      return { name: 'settings' };
+    case 'basic-settings':
+      return { name: 'basicSettings' };
+    case 'sync-data':
+      return { name: 'syncData' };
     case 'play': {
       const id = parseInt(parts[1] ?? '', 10);
       if (Number.isFinite(id) && id > 0) return { name: 'play', levelId: id };
@@ -116,10 +122,10 @@ function serializeHash(route: Route): string {
       return '#/';
     case 'levels':
       return '#/levels';
-    case 'leaderboard':
-      return '#/leaderboard';
-    case 'settings':
-      return '#/settings';
+    case 'basicSettings':
+      return '#/basic-settings';
+    case 'syncData':
+      return '#/sync-data';
     case 'play':
       return `#/play/${route.levelId}`;
   }
