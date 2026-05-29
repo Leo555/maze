@@ -155,18 +155,18 @@ export function maskCode(code: string): string {
 /**
  * 公开榜单条记录（前端展示用）。
  *
- * 安全设计：
+ * 安全 / 产品设计：
  *   - 不暴露玩家 code（持有 code = 持有写权限，公开榜单泄露 code 等于
  *     广播所有人的"存档钥匙"）
- *   - 是否为请求方自己由后端通过 ?me=<code> 比对后下发 isMe，
- *     前端无需也无法独立判定
- *   - 未设置昵称的玩家用 nick=null + 匿名兜底（前端展示 \"匿 名 玩 家\"）
+ *   - 上榜资格 = 已设置昵称：未设置昵称的玩家不进榜（后端 updateLeaderboards 跳过写入），
+ *     所以 nick 一定是非空字符串，前端无需做 null 兜底
+ *   - 是否为请求方自己由后端通过 ?me=<code> 比对后下发 isMe，前端无需也无法独立判定
  */
 export interface OverallRankItem {
   /** 排名（1-based） */
   rank: number;
-  /** 昵称；未设置则为 null，前端兜底显示匿名 */
-  nick: string | null;
+  /** 昵称（必有；上榜资格保证） */
+  nick: string;
   /** 通关数（0-100） */
   cleared: number;
   /** 总星数（0-300） */
@@ -175,10 +175,10 @@ export interface OverallRankItem {
   isMe: boolean;
 }
 
-/** 单关速通榜单条记录（同上：不暴露 code） */
+/** 单关速通榜单条记录（同上：必有昵称、不暴露 code） */
 export interface LevelRankItem {
   rank: number;
-  nick: string | null;
+  nick: string;
   /** 最佳通关用时（秒） */
   bestTime: number;
   bestStars: number;

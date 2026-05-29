@@ -21,6 +21,7 @@ import { storage } from './core/Storage';
 import { showToast } from './ui/Toast';
 import { pushErrorMessage } from './core/PushErrorMessage';
 import { isValidCode } from '../shared/types';
+import { maybeShowAccountGate } from './ui/overlays/AccountGate';
 
 // === 全局环境标记（CSS 可针对 body[data-env] 做差异化样式）===
 {
@@ -94,6 +95,9 @@ const recoverCode = params.get('recover');
 
 // === 立即启动 Game（用本地存档，0 阻塞）===
 new Game();
+// 启动账号门槛：等 bootstrap 完成 → 无昵称则弹（设置昵称 / 输入编号 二选一）
+// 不阻塞游戏启动，玩家在弹框关闭前看不到主菜单交互（CSS 层级保证）
+maybeShowAccountGate();
 // 第 2 次以上访问的 iOS Safari 用户，提示「添加到主屏」
 maybeShowAddToHomeScreen();
 

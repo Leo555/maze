@@ -131,9 +131,32 @@ export async function pushProgress(
   }
 }
 
-/** 设置 / 更新昵称（成功返回 true） */
-export async function pushNick(code: string, nick: string): Promise<boolean> {
-  if (!isValidCode(code) || !isValidNick(nick)) return false;
+/** 昵称设置失败的错误码（与后端 /api/nick 返回的 error 字段对齐） */
+export type NickError =
+  | 'bad_code'
+  | 'bad_nick'
+  | 'too_many_requests' // 5 分钟限流
+  | 'nick_too_frequent' // 7 天改名冷却
+  | 'forbidden'
+  | 'network';
+
+export interface NickResult {
+  ok: boolean;
+  /** 失败时的错误码 */
+  error?: NickError;
+  /** 7 天冷却剩余秒数（仅 nick_too_frequent 时返回） */
+  retryAfterSec?: number;
+}
+
+/**
+ * 设置 / 更新昵称。
+ *
+ * 与之前 boolean 返回的 pushNick 区别：现在能区分多种失败原因，
+ * 让 UI 给出精准提示（特别是 nick_too_frequent 需要展示剩余冷却时间）。
+ */
+export async function pushNick(code: string, nick: string): Promise<NickResult> {
+  if (!isValidCode(code)) return { ok: false, error: 'bad_code' };
+  if (!isValidNick(nick)) return { ok: false, error: 'bad_nick' };
   try {
     const res = await fetch('/api/nick', {
       method: 'POST',
@@ -141,11 +164,26 @@ export async function pushNick(code: string, nick: string): Promise<boolean> {
       body: JSON.stringify({ code, nick }),
       cache: 'no-store',
     });
-    if (res.status !== 200) return false;
-    const data = (await res.json()) as NickResponse;
-    return data.nick === nick;
+    if (res.status === 200) {
+      const data = (await res.json()) as NickResponse;
+      if (data.nick === nick) return { ok: true };
+      return { ok: false, error: 'network' };
+    }
+    let err: NickError = 'network';
+    let retryAfterSec: number | undefined;
+    try {
+      const body = (await res.json()) as {
+        error?: string;
+        retryAfterSec?: number;
+      };
+      if (body.error) err = body.error as NickError;
+      if (typeof body.retryAfterSec === 'number') retryAfterSec = body.retryAfterSec;
+    } catch {
+      /* 非 JSON 响应 */
+    }
+    return { ok: false, error: err, retryAfterSec };
   } catch {
-    return false;
+    return { ok: false, error: 'network' };
   }
 }
 

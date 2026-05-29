@@ -37,6 +37,11 @@ const kvImpl = {
       return 0;
     return 1;
   },
+  // mock 不真的支持 TTL；存在则返回一个固定占位值（生产环境真实 KV 会返回剩余秒数）
+  async ttl(key: string): Promise<number> {
+    if (state.store.has(key)) return 1234; // 占位剩余秒；测试只关心是否 > 0
+    return -2; // 与 Redis TTL 语义一致：key 不存在
+  },
   async incr(key: string): Promise<number> {
     const v = ((state.store.get(key) as number) || 0) + 1;
     state.store.set(key, v);
@@ -83,6 +88,16 @@ const kvImpl = {
   },
   async zcard(key: string): Promise<number> {
     return state.zsets.get(key)?.size ?? 0;
+  },
+  // 删除 ZSET 中的一个或多个 member（与 Redis ZREM 语义一致：返回真实删除数）
+  async zrem(key: string, ...members: string[]): Promise<number> {
+    const z = state.zsets.get(key);
+    if (!z) return 0;
+    let n = 0;
+    for (const m of members) {
+      if (z.delete(m)) n++;
+    }
+    return n;
   },
   async sadd(key: string, ...members: string[]): Promise<number> {
     const s = state.sets.get(key) ?? new Set<string>();

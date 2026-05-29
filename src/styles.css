@@ -166,6 +166,136 @@ body {
   pointer-events: auto;
 }
 
+/* ========== 启动账号门槛 (#account-gate) ==========
+ * 玩家未设昵称且未输编号时显示，盖在所有 UI 之上。
+ * 与 #overlay 不同：
+ *   - z-index 更高，确保不被任何 overlay 透过
+ *   - 不可关闭：没有蒙层 click-to-dismiss，没有 Esc 退出
+ *   - 完成绑定后由代码主动 .show 移除并清空内容
+ */
+#account-gate {
+  position: fixed;
+  inset: 0;
+  /* 30 高于 #overlay (20) 与所有 hud 元素 */
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 半透明背景 + 模糊：把后面的迷宫/主菜单虚化，强调"先完成此步" */
+  background: rgba(245, 239, 230, 0.78);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  /* 默认不可见，添加 .show 后淡入 */
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.32s ease;
+  padding: 16px;
+}
+
+#account-gate.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.gate-card {
+  width: 100%;
+  max-width: 440px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(58, 52, 43, 0.12);
+  border-radius: 18px;
+  padding: 36px 28px;
+  text-align: center;
+  box-shadow: 0 12px 48px rgba(58, 52, 43, 0.12);
+  /* 入场动画：随 gate 淡入再轻微上滑 */
+  animation: gate-card-in 0.45s ease-out 0.1s both;
+}
+
+@keyframes gate-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.gate-title {
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: 4px;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.gate-subtitle {
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: var(--text-muted);
+  margin-bottom: 24px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gate-tip {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-soft);
+  margin-bottom: 24px;
+  letter-spacing: 1px;
+}
+
+.gate-tip strong {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.gate-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  font-size: 15px;
+  letter-spacing: 2px;
+  text-align: center;
+  border: 1.5px solid rgba(58, 52, 43, 0.16);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--text);
+  margin-bottom: 20px;
+  font-family: inherit;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.gate-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: #fff;
+}
+
+.gate-btn-group {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.gate-btn {
+  flex: 1;
+  max-width: 180px;
+  /* 复用 .btn 的基础样式；这里只调整尺寸 */
+}
+
+@media (max-width: 480px) {
+  .gate-card {
+    padding: 28px 20px;
+  }
+  .gate-title {
+    font-size: 19px;
+    letter-spacing: 3px;
+  }
+}
+
 /* ========== HUD 通用元素 ========== */
 .hud-top {
   position: absolute;

@@ -209,6 +209,12 @@
       <canvas id="game-canvas" aria-label="迷宫游戏主画面"></canvas>
       <div id="hud"></div>
       <div id="overlay"></div>
+      <!--
+        启动门槛容器：玩家未设置昵称 / 未通过编号恢复时显示，
+        盖在所有 UI 之上，只有完成账号绑定后才能进入主菜单。
+        独立于 #overlay：不参与 hideOverlay / 路由切换的清理逻辑。
+      -->
+      <div id="account-gate"></div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

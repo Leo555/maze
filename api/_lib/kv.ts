@@ -71,6 +71,38 @@ export async function setNick(code: string, nick: string): Promise<void> {
   await kv.set(`nick:${code}`, nick, { ex: TTL_SECONDS });
 }
 
+/**
+ * 昵称改名冷却：7 天内只能改一次（避免刷榜骚扰 / 滥用昵称制造混淆）。
+ *
+ * 设计：
+ *   - 用 KV key `nick:cd:{code}` 占位，TTL 7 天
+ *   - SET NX EX 原子操作：成功 = 拿到改名权；失败 = 仍在冷却期
+ *   - 注意：这是"已设过昵称的改名冷却"，所以由 nick 接口判断"是否首次"后再决定是否检查
+ *     首次设置（getNick 返回 null）必须放行，否则玩家被永久卡死
+ *
+ * @returns ok=true 时调用方可以继续；ok=false 时附带 retryAfterSec 用于前端文案
+ */
+const NICK_COOLDOWN_SEC = 7 * 24 * 60 * 60;
+
+export async function tryAcquireNickChangeSlot(
+  code: string
+): Promise<{ ok: boolean; retryAfterSec?: number }> {
+  const key = `nick:cd:${code}`;
+  try {
+    const got = await kv.set(key, Date.now(), { nx: true, ex: NICK_COOLDOWN_SEC });
+    if (got) return { ok: true };
+    // 拿不到锁，查剩余 TTL 给前端展示
+    const ttl = await kv.ttl(key);
+    return {
+      ok: false,
+      retryAfterSec: typeof ttl === 'number' && ttl > 0 ? ttl : NICK_COOLDOWN_SEC,
+    };
+  } catch {
+    // KV 异常：fail-open（避免抖动卡死合法用户）
+    return { ok: true };
+  }
+}
+
 /** 批量取昵称（排行榜渲染用，N+1 → 1 次 RTT） */
 export async function mgetNick(codes: string[]): Promise<(string | null)[]> {
   if (codes.length === 0) return [];
@@ -85,14 +117,38 @@ export async function mgetNick(codes: string[]): Promise<(string | null)[]> {
 /**
  * 在玩家进度变更后更新排行榜（fire-and-forget 调用，失败不影响主流程）。
  *
+ * 「上榜资格」规则：
+ *   只有设置了昵称的玩家才能进入榜单。这是产品策略层面的硬约束：
+ *     - 排行榜不再返回任何 code 信息（隐私 + 安全），改用昵称做唯一可见标识
+ *     - 没有昵称的条目无法展示，留在 ZSET 里只会污染 top N 排序结果
+ *   实现上：调用前查一次 nick:{code}，缺失则跳过整个 pipeline 写入。
+ *   一旦玩家后续设置了昵称，setNick → backfillLeaderboards 会把当前进度补回榜单。
+ *
  * 包含两件事：
  *   1. 综合榜 lb:overall 用 calcOverallScore 写入
- *   2. 玩家本次刚改善的关卡（最多就是当前 unlocked-1 这一关）的速通榜
+ *   2. 玩家所有已通关关卡的速通榜
  *      —— 简化处理：每次 save 都把所有已通关关的 bestTime 同步到对应榜上
  *      （N=100 其实可以接受，但为减小 KV 调用，只更新 bestTime/bestStars
  *       发生变化的关。这里直接全量写最简单，pipeline 一次发出）
  */
 export async function updateLeaderboards(
+  code: string,
+  progress: SaveData
+): Promise<void> {
+  // 上榜资格：必须先有昵称
+  const nick = await getNick(code);
+  if (!nick) return;
+
+  await writeLeaderboards(code, progress);
+}
+
+/**
+ * 把当前 code 的全部进度写入排行榜（不查 nick，调用方需自行保证昵称已存在）。
+ *
+ * 使用场景：setNick 成功后，把"以前已通关但因无昵称未上榜"的进度补回榜单。
+ * 内部辅助函数，不暴露给 handler。
+ */
+async function writeLeaderboards(
   code: string,
   progress: SaveData
 ): Promise<void> {
@@ -114,7 +170,29 @@ export async function updateLeaderboards(
 }
 
 /**
+ * setNick 成功后调用：把已有进度回填到排行榜。
+ *
+ * 时序：玩家先玩（unlocked 增长）但没设昵称 → 此时 updateLeaderboards 因 nick 缺失
+ * 跳过写入 → 玩家后来设了昵称 → 此函数把 progress 写入榜单，让玩家立即可见排名。
+ *
+ * 与 updateLeaderboards 的区别：
+ *   - updateLeaderboards: 在 save 路径调用，要查 nick 决定是否写
+ *   - backfillLeaderboards: 在 setNick 路径调用，nick 刚被写入所以无需再查
+ *
+ * fail-open：写榜失败不影响 setNick 主流程；下一次 save 会自然重试 updateLeaderboards。
+ */
+export async function backfillLeaderboards(code: string): Promise<void> {
+  const progress = await getProgress(code);
+  if (!progress) return; // 还没玩过，无须回填
+  await writeLeaderboards(code, progress);
+}
+
+/**
  * 综合榜 top N（按 score 降序）。
+ *
+ * 上榜资格 = 已设昵称：updateLeaderboards 已经在 nick 缺失时跳过 ZSET 写，
+ * 但旧数据 / 极端竞态下 ZSET 里仍可能有 nick 现在缺失的 member，
+ * 这里再做一次过滤兜底，确保前端拿到的每条记录 nick 都是非空字符串。
  *
  * @param limit  返回条目数（最多 100）
  * @param viewerCode  可选；请求方自己的 code，用于在响应中标记 isMe（不会回包给前端）
@@ -139,21 +217,28 @@ export async function getOverallTop(
   }
   const nicks = await mgetNick(codes);
 
-  return codes.map((c, i) => {
+  // 过滤 nick 缺失的条目；rank 在过滤后重新编号，保证前端看到的是连续 1..N
+  const out: OverallRankItem[] = [];
+  for (let i = 0; i < codes.length; i++) {
+    const nick = nicks[i];
+    if (!nick) continue; // 上榜资格保护：nick 缺失则跳过
     const { cleared, stars } = parseOverallScore(scores[i]);
-    return {
-      rank: i + 1,
-      nick: nicks[i] ?? null,
+    out.push({
+      rank: out.length + 1,
+      nick,
       cleared,
       stars,
       // 关键：code 不出包；isMe 由后端比对 viewerCode 后下发，前端零计算、零暴露
-      isMe: viewerCode ? c === viewerCode : false,
-    };
-  });
+      isMe: viewerCode ? codes[i] === viewerCode : false,
+    });
+  }
+  return out;
 }
 
 /**
  * 单关速通榜（按用时升序）。
+ *
+ * 同 getOverallTop：过滤 nick 缺失的条目，确保返回 nick 都是非空字符串。
  *
  * @param viewerCode  可选；请求方自己的 code，用于标记 isMe
  */
@@ -182,16 +267,20 @@ export async function getLevelTop(
     Promise.all(codes.map((c) => getProgress(c))),
   ]);
 
-  return codes.map((c, i) => {
+  const out: LevelRankItem[] = [];
+  for (let i = 0; i < codes.length; i++) {
+    const nick = nicks[i];
+    if (!nick) continue; // 上榜资格保护
     const stars = progresses[i]?.records[levelId]?.bestStars ?? 0;
-    return {
-      rank: i + 1,
-      nick: nicks[i] ?? null,
+    out.push({
+      rank: out.length + 1,
+      nick,
       bestTime: times[i],
       bestStars: stars,
-      isMe: viewerCode ? c === viewerCode : false,
-    };
-  });
+      isMe: viewerCode ? codes[i] === viewerCode : false,
+    });
+  }
+  return out;
 }
 
 /**

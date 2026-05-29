@@ -135,6 +135,13 @@ async function main(): Promise<void> {
   const code1 = 'jeTZUvAs';
   const code2 = 'AbCd234K';
 
+  // 上榜资格：先给两位测试用户预置昵称（绕过 handler 直写 KV，
+  // 模拟"玩家先过启动门槛设了昵称才进游戏"的真实流程）
+  // 没有这一步 updateLeaderboards 会因 nick 缺失跳过 ZSET 写入，
+  // 导致后续榜单 / admin 测试拿不到数据
+  kvState.store.set(`nick:${code1}`, '迷雾旅人');
+  kvState.store.set(`nick:${code2}`, '速通王');
+
   // 1. 缺少 origin → 403
   {
     const req = makeReq({ method: 'POST', url: '/api/save', body: { code: code1 } });
@@ -484,9 +491,15 @@ async function main(): Promise<void> {
     ok('sync 同时返回 nick=迷雾旅人', body.nick === '迷雾旅人');
   }
   {
-    // code2 没设过 nick → 应返回 nick=null（不报错、不缺失字段）
+    // 边界：有 progress 但没设 nick 的 code → sync 应返回 nick=null
+    // 用一个独立的 code 模拟（避免污染主流程的 code1/code2）
+    const codeNoNick = 'kPmR3gT9';
+    kvState.store.set(`code:${codeNoNick}`, {
+      progress: { v: 1, unlocked: 1, records: {} },
+      updatedAt: Date.now(),
+    });
     const res = makeRes();
-    await syncH(makeReq({ url: `/api/sync?code=${code2}` }), res);
+    await syncH(makeReq({ url: `/api/sync?code=${codeNoNick}` }), res);
     const body = parseJson(res) as { nick?: string | null };
     ok('sync 无昵称的 code → nick=null', body.nick === null);
   }
@@ -615,6 +628,152 @@ async function main(): Promise<void> {
       ok('id=999 越界 → 丢弃', !recs['999']);
       ok('id=5 字符串 bestTime → 丢弃', !recs['5']);
     }
+  }
+
+  // ---------- 上榜资格 = 已设昵称 ----------
+  console.log('\n=== Account: 昵称是上榜资格 ===');
+  {
+    // 新 code 没有昵称，save 后不应进 ZSET
+    const codeAnon = 'sNkR9pXt';
+    kvState.store.delete(`sess:${codeAnon}`);
+    kvState.store.delete(`rl:save:burst:${codeAnon}`);
+    const r = makeRes();
+    await saveH(
+      makeReq({
+        method: 'POST',
+        url: '/api/save',
+        ip: '10.0.0.50',
+        body: {
+          code: codeAnon,
+          progress: {
+            v: 1,
+            unlocked: 3,
+            records: { 1: { bestTime: 15, bestStars: 3, cleared: true } },
+          },
+        },
+      }),
+      r
+    );
+    ok('无昵称 save → 200（接口仍成功，仅不上榜）', r.statusCode === 200);
+    await new Promise((rs) => setTimeout(rs, 80));
+    const z = kvState.zsets.get('lb:overall');
+    ok('无昵称用户不进综合榜', !z?.has(codeAnon));
+    const z1 = kvState.zsets.get('lb:lvl:1');
+    ok('无昵称用户不进单关榜', !z1?.has(codeAnon));
+
+    // 给他设昵称 → 应触发回填，立即上榜
+    const r2 = makeRes();
+    await nickH(
+      makeReq({
+        method: 'POST',
+        url: '/api/nick',
+        ip: '10.0.0.50',
+        body: { code: codeAnon, nick: '后来才命名的旅人' },
+      }),
+      r2
+    );
+    ok('补设昵称 → 200', r2.statusCode === 200);
+    await new Promise((rs) => setTimeout(rs, 80));
+    const z3 = kvState.zsets.get('lb:overall');
+    ok('补设昵称后已回填到综合榜', z3?.has(codeAnon) === true);
+    const z4 = kvState.zsets.get('lb:lvl:1');
+    ok('补设昵称后已回填到单关榜', z4?.has(codeAnon) === true);
+  }
+
+  // ---------- 7 天改名冷却 ----------
+  console.log('\n=== Account: 改名 7 天冷却 ===');
+  {
+    const codeRen = 'rEnAm8Ks';
+    // 首次设置：不限频
+    kvState.store.delete(`nick:cd:${codeRen}`);
+    {
+      const r = makeRes();
+      await nickH(
+        makeReq({
+          method: 'POST',
+          url: '/api/nick',
+          ip: '10.0.0.60',
+          body: { code: codeRen, nick: '初次命名' },
+        }),
+        r
+      );
+      ok('首次设置昵称 → 200（不走冷却）', r.statusCode === 200);
+      ok(
+        '首次设置后未占用冷却锁',
+        !kvState.store.has(`nick:cd:${codeRen}`)
+      );
+    }
+    // 第二次改名：占用冷却锁，第三次同窗口内必拒
+    {
+      const r = makeRes();
+      await nickH(
+        makeReq({
+          method: 'POST',
+          url: '/api/nick',
+          ip: '10.0.0.60',
+          body: { code: codeRen, nick: '第二个昵称' },
+        }),
+        r
+      );
+      ok('第二次改名 → 200（拿到冷却锁）', r.statusCode === 200);
+      ok(
+        '冷却锁已建立',
+        kvState.store.has(`nick:cd:${codeRen}`)
+      );
+    }
+    {
+      const r = makeRes();
+      await nickH(
+        makeReq({
+          method: 'POST',
+          url: '/api/nick',
+          ip: '10.0.0.60',
+          body: { code: codeRen, nick: '第三个昵称' },
+        }),
+        r
+      );
+      ok(
+        '冷却期内第三次改名 → 429',
+        r.statusCode === 429
+      );
+      const body = parseJson(r) as { error?: string };
+      ok('错误码=nick_too_frequent', body.error === 'nick_too_frequent');
+    }
+    // 幂等：用相同昵称重复提交不应触发冷却
+    {
+      const r = makeRes();
+      await nickH(
+        makeReq({
+          method: 'POST',
+          url: '/api/nick',
+          ip: '10.0.0.60',
+          body: { code: codeRen, nick: '第二个昵称' }, // 与现有相同
+        }),
+        r
+      );
+      ok('幂等：与现昵称相同 → 200', r.statusCode === 200);
+    }
+  }
+
+  // ---------- nick=null 不再出现在榜单（响应类型紧化） ----------
+  console.log('\n=== Account: 榜单响应不含 nick=null ===');
+  {
+    // 直接构造一个"已在榜上但 nick 缺失"的脏数据，验证 getOverallTop 会过滤掉
+    const dirtyCode = 'dRtyM9Ks';
+    const z = kvState.zsets.get('lb:overall') ?? new Map<string, number>();
+    z.set(dirtyCode, 99999);
+    kvState.zsets.set('lb:overall', z);
+    // 注意：故意不设 nick:dirtyCode
+
+    const res = makeRes();
+    await lbH(makeReq({ url: '/api/leaderboard?type=overall&limit=100' }), res);
+    const body = parseJson(res) as {
+      items?: { nick: string }[];
+    };
+    ok(
+      '脏数据（nick 缺失）被过滤，不出现在榜单',
+      body.items?.every((it) => typeof it.nick === 'string' && it.nick.length > 0) === true
+    );
   }
 
   console.log(`\n${passed} passed, ${failed} failed`);

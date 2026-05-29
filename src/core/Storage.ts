@@ -16,7 +16,7 @@
  */
 
 import { pullByCode, pushProgress, pushNick } from './CloudSync';
-import type { PushError } from './CloudSync';
+import type { PushError, NickResult } from './CloudSync';
 import {
   type SaveData,
   type LevelRecord,
@@ -208,22 +208,31 @@ export class Storage {
     return this.nick;
   }
 
+  /** 是否已设置昵称（用于启动门槛 / 上榜资格判定） */
+  hasNick(): boolean {
+    return this.nick !== null && this.nick.length > 0;
+  }
+
   /**
    * 设置 / 更新昵称。
    *
    * 写入语义：与 reset 一致——必须等云端写入成功才视为完成，
    * 避免本地写了但云端失败导致排行榜显示与本地不一致。
    *
-   * @returns true = 云端写入成功；false = 校验失败 / 限流 / 网络异常
+   * @returns 结构化结果。失败时附带 error / retryAfterSec 供 UI 文案路由：
+   *   - bad_nick           前端校验已挡，理论不会到这里
+   *   - too_many_requests  5 分钟限流
+   *   - nick_too_frequent  7 天改名冷却（附 retryAfterSec）
+   *   - forbidden / network 其它网络异常
    */
-  async setNick(nick: string): Promise<boolean> {
-    if (!isValidNick(nick)) return false;
-    const ok = await pushNick(this.code, nick);
-    if (!ok) return false;
+  async setNick(nick: string): Promise<NickResult> {
+    if (!isValidNick(nick)) return { ok: false, error: 'bad_nick' };
+    const r = await pushNick(this.code, nick);
+    if (!r.ok) return r;
     this.nick = nick;
     this.flushLocalNick();
     this.notifyChange();
-    return true;
+    return r;
   }
 
   /**

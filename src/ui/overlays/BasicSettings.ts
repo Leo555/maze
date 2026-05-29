@@ -16,6 +16,7 @@ import { storage } from '../../core/Storage';
 import { showToast } from '../Toast';
 import { attachClickSfx, showOverlay } from './shared';
 import { isValidNick, NICK_MAX_LENGTH } from '../../../shared/types';
+import { nickErrorMessage } from '../../core/NickErrorMessage';
 
 /** 渲染昵称设置行 */
 function buildNicknameRow(): HTMLElement {
@@ -60,12 +61,13 @@ function buildNicknameRow(): HTMLElement {
     const original = saveBtn.textContent;
     saveBtn.textContent = '保 存 中...';
     try {
-      const ok = await storage.setNick(v);
-      if (ok) {
+      const r = await storage.setNick(v);
+      if (r.ok) {
         showToast('昵称已更新', 'success');
         refreshBtnState();
       } else {
-        showToast('昵称保存失败，请稍后重试', 'error', 2800);
+        // 用结构化错误码给精准文案（特别是 nick_too_frequent 会展示剩余时间）
+        showToast(nickErrorMessage(r.error, r.retryAfterSec), 'error', 3200);
       }
     } finally {
       if (saveBtn.textContent === '保 存 中...') saveBtn.textContent = original;
@@ -80,6 +82,7 @@ export function showBasicSettings(onBack: () => void): void {
 
   const scene = document.createElement('div');
   scene.className = 'scene';
+
   const card = document.createElement('div');
   card.className = 'scene-card';
   card.innerHTML = `
