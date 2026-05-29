@@ -81,6 +81,13 @@ export class Storage {
     this.code = this.loadOrCreateCode();
     this.data = this.loadLocal();
     this.nick = this.loadLocalNick();
+    // 开发模式兜底：本地无 KV 凭据，setNick 会失败 → AccountGate 永远卡住。
+    // 给一个内存级默认昵称让门槛直接通过；不写 localStorage，避免污染真实
+    // 玩家在 dev 里手动设置/恢复后的状态。生产构建中 import.meta.env.DEV
+    // 是编译期常量 false，整段会被 esbuild DCE 清除，对线上 0 影响。
+    if (import.meta.env.DEV && this.nick === null) {
+      this.nick = '开发者';
+    }
     this.bootstrapPromise = new Promise<void>((r) => (this.bootstrapResolve = r));
     void this.pullFromCloud();
   }
