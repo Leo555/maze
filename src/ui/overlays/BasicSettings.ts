@@ -15,6 +15,7 @@ import { audio } from '../../core/Audio';
 import { storage } from '../../core/Storage';
 import { showToast } from '../Toast';
 import { attachClickSfx, showOverlay } from './shared';
+import { attachSceneHeader } from './SceneHeader';
 import { isValidNick, NICK_MAX_LENGTH } from '../../../shared/types';
 import { nickErrorMessage } from '../../core/NickErrorMessage';
 
@@ -82,6 +83,9 @@ export function showBasicSettings(onBack: () => void): void {
 
   const scene = document.createElement('div');
   scene.className = 'scene';
+
+  // 顶部 header：欢迎语 + 全局进度
+  attachSceneHeader(scene, { greeting: { kind: 'sub' } });
 
   const card = document.createElement('div');
   card.className = 'scene-card';

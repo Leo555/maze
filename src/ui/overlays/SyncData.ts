@@ -20,6 +20,7 @@ import { attachClickSfx, showOverlay } from './shared';
 import { showConfirm } from './Confirm';
 import { buildSyncPanel } from './sync/SyncPanel';
 import { pushErrorMessage } from '../../core/PushErrorMessage';
+import { attachSceneHeader } from './SceneHeader';
 
 /** 创建一个带标题的分区容器 */
 function buildSection(title: string, subtitle?: string): {
@@ -49,6 +50,10 @@ export function showSyncData(onBack: () => void): void {
 
   const scene = document.createElement('div');
   scene.className = 'scene';
+
+  // 顶部 header：欢迎语 + 全局进度
+  attachSceneHeader(scene, { greeting: { kind: 'sub' } });
+
   const card = document.createElement('div');
   card.className = 'scene-card scene-card-sync';
   card.innerHTML = `

@@ -3,6 +3,11 @@
  *
  * 共享：星星点亮动画样式、按钮组结构。
  * 通关页还会在首次通关后引导用户保存同步进度（防丢失）。
+ *
+ * 头部 .scene-header（顶部红框区域）由 SceneHeader 通用组件提供：
+ *   - 通关：欢迎语按 stars 切换"太棒了"/"继续加油" + 全局进度提示
+ *   - 失败：欢迎语为"别灰心" + 全局进度提示
+ * 卡片内不再渲染 .result-greeting，避免与 header 重复。
  */
 
 import { audio } from '../../core/Audio';
@@ -10,6 +15,7 @@ import { storage } from '../../core/Storage';
 import { formatTimePrecise } from '../../core/utils';
 import { attachClickSfx, showOverlay } from './shared';
 import { showBackupReminder } from './sync/QrDialog';
+import { attachSceneHeader } from './SceneHeader';
 
 export interface ResultData {
   levelId: number;
@@ -19,22 +25,6 @@ export interface ResultData {
   stars: number;
   isNewBest: boolean;
   hasNext: boolean;
-}
-
-/**
- * 根据通关表现 + 昵称生成称呼语。
- *
- * 设计：
- *   - 无昵称：返回 null，结算页保持原样（不强行打扰）
- *   - 有昵称 + 3 星：表扬性称呼
- *   - 有昵称 + ≤2 星：温和鼓励性称呼
- *
- * 文案保持简短；后续若需 A/B 调整文案放在这里集中改。
- */
-function buildResultGreeting(stars: number, nick: string | null): string | null {
-  if (!nick) return null;
-  if (stars >= 3) return `太 棒 了 · ${nick}`;
-  return `继 续 加 油 · ${nick}`;
 }
 
 export function showResult(
@@ -54,6 +44,10 @@ export function showResult(
 
   const scene = document.createElement('div');
   scene.className = 'scene';
+
+  // 顶部 header：根据星星数生成称呼语 + 全局进度
+  attachSceneHeader(scene, { greeting: { kind: 'result', stars: data.stars } });
+
   const card = document.createElement('div');
   card.className = 'scene-card';
 
@@ -76,18 +70,6 @@ export function showResult(
       ${data.isNewBest ? '<div class="row" style="color:#ffcb47;border:none"><span>NEW BEST!</span><span></span></div>' : ''}
     </div>
   `;
-
-  // 昵称称呼：插入到主标题与副标题之间，与主菜单 .scene-greeting 位置保持一致，
-  // 用 textContent 防昵称中的特殊字符破坏 DOM。
-  // 玩家从命名 → 进入 → 通关全程都被"看见"，形成连贯的个人化体验。
-  const greeting = buildResultGreeting(data.stars, storage.getNick());
-  if (greeting) {
-    const titleEl = card.querySelector('.scene-title');
-    const g = document.createElement('div');
-    g.className = 'result-greeting';
-    g.textContent = greeting;
-    titleEl?.insertAdjacentElement('afterend', g);
-  }
 
   const btnGroup = document.createElement('div');
   btnGroup.className = 'btn-group';
@@ -164,6 +146,10 @@ export function showFail(
 
   const scene = document.createElement('div');
   scene.className = 'scene';
+
+  // 顶部 header：失败安慰语 + 全局进度（失败时让玩家看到自己整体已走多远，软化打击）
+  attachSceneHeader(scene, { greeting: { kind: 'fail' } });
+
   const card = document.createElement('div');
   card.className = 'scene-card';
   card.innerHTML = `
@@ -171,16 +157,6 @@ export function showFail(
     <div class="scene-subtitle">${reason}</div>
   `;
 
-  // 失败页也显示昵称鼓励：失败时玩家心理压力较高，加一句轻量称呼能软化打击。
-  // 位置与通关页保持一致——主标题下方、副标题（失败原因）之上。
-  const nick = storage.getNick();
-  if (nick) {
-    const titleEl = card.querySelector('.scene-title');
-    const g = document.createElement('div');
-    g.className = 'result-greeting';
-    g.textContent = `别 灰 心 · ${nick}`;
-    titleEl?.insertAdjacentElement('afterend', g);
-  }
   const btnGroup = document.createElement('div');
   btnGroup.className = 'btn-group';
 
@@ -211,3 +187,4 @@ export function showFail(
   scene.appendChild(card);
   showOverlay(scene);
 }
+

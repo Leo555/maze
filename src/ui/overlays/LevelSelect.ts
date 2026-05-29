@@ -12,6 +12,7 @@ import {
 } from '../../config/levels';
 import { themes } from '../../config/theme';
 import { attachClickSfx, showOverlay } from './shared';
+import { attachSceneHeader } from './SceneHeader';
 
 export function showLevelSelect(handlers: {
   /** 是否从游戏内进入：true 时「返回」回到当前关卡而非主菜单 */
@@ -23,6 +24,10 @@ export function showLevelSelect(handlers: {
 
   const scene = document.createElement('div');
   scene.className = 'scene';
+
+  // 顶部 header：欢迎语 + 全局进度（关卡选择页强相关，让玩家快速了解整体推进）
+  attachSceneHeader(scene, { greeting: { kind: 'sub' } });
+
   const card = document.createElement('div');
   card.className = 'scene-card scene-card-wide';
   card.innerHTML = `

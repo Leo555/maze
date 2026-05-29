@@ -1,13 +1,15 @@
 /**
- * 主菜单：标题 + 进度概览 + 2 个按钮（开始/选关） + 右上角竖向 4 个图标。
+ * 主菜单：标题 + 2 个按钮（开始/选关） + 右上角竖向 4 个图标。
  *
  * 设计原则：
  *   - 主按钮组只保留"开始游戏"和"选择关卡"两个最高频操作，视觉清爽
  *   - 其他功能（基础设置 / 同步数据 / 排行榜 / 分享）做成右上角竖向图标条，
  *     仿照 iOS 控制中心的"功能集合"形态，节省横向空间又给每个功能独立入口
  *   - 不做"更多 ⋯ 菜单"折叠：单层操作直达比两次点击体验好
+ *   - 欢迎语 + 进度提示统一由 .scene-header（顶部红框区域）展示，
+ *     卡片内只放"标题 + 副标题 + 主操作 + 图标条"，主次分明
  *
- * 订阅 storage 变更：云端 bootstrap 晚到时自动刷新菜单文案与进度数。
+ * 订阅 storage 变更：云端 bootstrap 晚到时自动刷新菜单文案。
  */
 
 import { audio } from '../../core/Audio';
@@ -15,36 +17,25 @@ import { storage } from '../../core/Storage';
 import { levels } from '../../config/levels';
 import { attachClickSfx, showOverlay } from './shared';
 import { showShareDialog } from './ShareDialog';
+import { attachSceneHeader } from './SceneHeader';
 
 /**
- * 计算当前进度，用于在主菜单显示「下一关」与总览
+ * 计算"下一关"目标：
  * - nextLevelId: 「开始游戏」按钮要进入的目标关卡
- * - cleared / total: 已通关数 / 总关卡数
- * - stars / starsMax: 累计星数 / 最大星数
- * - allCleared: 全部通关
- * - nick: 玩家昵称（云端 / 本地缓存的同步值），无昵称为 null
+ * - nextLevel:   对应的关卡配置（用于按钮文案"继续 · {名}"）
+ * - allCleared:  全部通关（按钮文案改为"重新挑战"）
+ * - fresh:       完全没玩过（按钮文案改为"开始游戏"）
  */
-function computeProgress(): {
+function computeNext(): {
   nextLevelId: number;
   nextLevel: (typeof levels)[number];
-  cleared: number;
-  total: number;
-  stars: number;
-  starsMax: number;
   allCleared: boolean;
-  fresh: boolean; // 完全没玩过（新存档）
-  nick: string | null;
+  fresh: boolean;
 } {
   let cleared = 0;
-  let stars = 0;
   for (const lv of levels) {
-    const r = storage.getRecord(lv.id);
-    if (r?.cleared) {
-      cleared++;
-      stars += r.bestStars;
-    }
+    if (storage.getRecord(lv.id)?.cleared) cleared++;
   }
-  // 第一个未通关且已解锁的关卡
   let nextId = levels[0].id;
   const found = levels.find((lv) => {
     const r = storage.getRecord(lv.id);
@@ -55,32 +46,9 @@ function computeProgress(): {
   return {
     nextLevelId: allCleared ? levels[0].id : nextId,
     nextLevel: levels.find((l) => l.id === (allCleared ? levels[0].id : nextId)) ?? levels[0],
-    cleared,
-    total: levels.length,
-    stars,
-    starsMax: levels.length * 3,
     allCleared,
     fresh: cleared === 0,
-    nick: storage.getNick(),
   };
-}
-
-/**
- * 根据进度状态拼欢迎语。
- *
- * 设计：
- *   - 无昵称：返回 null（保持原 UI 不变，不强行打扰）
- *   - fresh + 有昵称：    "你好，{nick}"（首次见面）
- *   - 全通关 + 有昵称：   "欢迎回来，{nick}"（亲切；100 关成就由进度行展示，避免重复）
- *   - 已通关 + 有昵称：   "欢迎回来，{nick}"
- *
- * 文案保持简洁；昵称 12 字上限已避免撑破窄屏布局。
- * 注意：返回的字符串最终通过 textContent 渲染，无需 HTML 转义；不要在调用方用 innerHTML。
- */
-function buildGreeting(p: ReturnType<typeof computeProgress>): string | null {
-  if (!p.nick) return null;
-  if (p.fresh) return `你 好 · ${p.nick}`;
-  return `欢 迎 回 来 · ${p.nick}`;
 }
 
 /**
@@ -122,6 +90,9 @@ export function showMainMenu(handlers: {
   const scene = document.createElement('div');
   scene.className = 'scene';
 
+  // 顶部 header：欢迎语 + 进度提示（贴在 scene 顶部红框区域）
+  attachSceneHeader(scene, { greeting: { kind: 'menu' } });
+
   const card = document.createElement('div');
   card.className = 'scene-card';
   scene.appendChild(card);
@@ -129,50 +100,16 @@ export function showMainMenu(handlers: {
   /**
    * 渲染主菜单卡片内容（仅 card 子节点，不动 scene 自身）。
    *
-   * 每次 storage 变更都重新计算 progress 并重绘按钮文案/进度行：
+   * 每次 storage 变更都重新计算 next 目标并重绘按钮文案：
    *   - 启动后 storage.bootstrapPromise 已 await，正常情况下首次渲染已是最新进度
    *   - 但慢网络/超时兜底下，云端进度可能在主菜单显示后才到 → 通过 onChange 兜底刷新
    */
   const renderCard = (): void => {
-    const progress = computeProgress();
+    const next = computeNext();
     card.innerHTML = `
       <div class="scene-title">晨 雾 迷 径</div>
       <div class="scene-subtitle">MISTY · PATH · DAWN</div>
     `;
-
-    // 欢迎语：仅在玩家设置过昵称时显示。
-    // 紧贴在主标题下方、副标题之上，作为"这是你的迷径"的个人化归属感标签。
-    // 用 textContent 写入，天然防止昵称中的特殊字符（如 <、&）破坏 DOM 或触发 XSS。
-    const greeting = buildGreeting(progress);
-    if (greeting) {
-      const titleEl = card.querySelector('.scene-title');
-      const g = document.createElement('div');
-      g.className = 'scene-greeting';
-      g.textContent = greeting;
-      titleEl?.insertAdjacentElement('afterend', g);
-    }
-
-    // 进度行
-    const progressEl = document.createElement('div');
-    progressEl.className = 'scene-progress';
-    if (progress.allCleared) {
-      progressEl.innerHTML = `
-        <div class="progress-line main">已 全 部 通 关</div>
-        <div class="progress-line sub">★ ${progress.stars} / ${progress.starsMax}</div>
-      `;
-    } else if (progress.fresh) {
-      progressEl.innerHTML = `
-        <div class="progress-line main">即 将 开 始 · ${progress.nextLevel.name}</div>
-        <div class="progress-line sub">共 ${progress.total} 关 等 你 探 索</div>
-      `;
-    } else {
-      progressEl.innerHTML = `
-        <div class="progress-line main">下 一 关 · ${progress.nextLevel.name}</div>
-        <div class="progress-line sub">已 通 关 ${progress.cleared} / ${progress.total} &nbsp;·&nbsp; ★ ${progress.stars} / ${progress.starsMax}</div>
-        <div class="progress-bar"><div class="progress-bar-fill" style="width:${(progress.cleared / progress.total) * 100}%"></div></div>
-      `;
-    }
-    card.appendChild(progressEl);
 
     // 主按钮组：仅 2 个最高频操作（开始 / 选关）
     const btnGroup = document.createElement('div');
@@ -181,16 +118,16 @@ export function showMainMenu(handlers: {
     const playBtn = document.createElement('button');
     playBtn.className = 'btn primary';
     let playLabel: string;
-    if (progress.allCleared) {
+    if (next.allCleared) {
       playLabel = '重 新 挑 战';
-    } else if (progress.fresh) {
+    } else if (next.fresh) {
       playLabel = '开 始 游 戏';
     } else {
-      playLabel = `继 续 · ${progress.nextLevel.name}`;
+      playLabel = `继 续 · ${next.nextLevel.name}`;
     }
     playBtn.textContent = playLabel;
     attachClickSfx(playBtn);
-    playBtn.onclick = () => handlers.onPlay(progress.nextLevelId);
+    playBtn.onclick = () => handlers.onPlay(next.nextLevelId);
 
     const selectBtn = document.createElement('button');
     selectBtn.className = 'btn';
@@ -270,3 +207,4 @@ export function showMainMenu(handlers: {
   });
   observer.observe(document.body, { childList: true, subtree: true });
 }
+

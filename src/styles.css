@@ -469,6 +469,15 @@ body {
   transition: opacity 0.4s ease;
 }
 
+/*
+ * 仅当 scene 显式挂载了 .scene-header 时才在顶部预留空间。
+ * 这样 Pause / OptimalReview 等不挂 header 的 .scene 仍保持纯 flex center，
+ * 卡片视觉位置不变。
+ */
+.scene.has-scene-header {
+  padding-top: 88px;
+}
+
 .scene.show {
   opacity: 1;
 }
@@ -574,81 +583,86 @@ body {
 }
 
 /*
- * 主菜单欢迎语：玩家设置昵称后才显示，作为个人化标识。
- * 位置：紧贴在主标题下方、副标题之上，是"这是你的迷径"的归属感标签。
+ * Scene 顶部头部条（卡片之上的空白区域）
  *
- * 间距策略：
- *   .scene-title 默认 margin-bottom 10px，欢迎语用负 margin-top 收紧到 ~2px，
- *   与 title 形成"主标题 + 称呼语"的紧密视觉组合；下方留 8px 与副标题分开。
+ * 视觉位置：absolute 锚定 .scene 顶部，水平居中、与 viewport 顶部留出安全距离。
+ *   .scene 自身仍保持 flex center，卡片继续居中显示，header 浮在其上方。
+ *
+ * 内容：
+ *   - .scene-header-greeting  欢迎语 / 称呼语（玩家昵称驱动，无昵称时不渲染）
+ *   - .scene-header-progress  进度提示（下一关 / 已通关 / 累计星数；用 dot 分隔）
+ *
+ * 设计说明：
+ *   - 用 absolute 而不是 column flex：保留 card 在视觉中心，避免 header 矮 / 高 时
+ *     把卡片向下推得不一致；header 永远在屏幕顶部"红框"区域内，节奏稳定。
+ *   - 移动端 .scene-card 设了 max-height + overflow，header 的 absolute 定位
+ *     不会被卡片遮挡（z-index 默认即可，header 在 DOM 顺序上先于 card 但通过
+ *     绝对定位脱离文档流，仍可被 card 内容覆盖；不过实际上 card 不会撞到顶部）。
  */
-.scene-greeting {
-  margin: -2px 0 8px;
-  font-size: 13px;
-  letter-spacing: 2px;
-  color: var(--accent, var(--text-soft));
-  font-weight: 500;
-  text-align: center;
-  /* 长昵称兜底：单行省略，避免撑破窄屏卡片 */
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  /* 入场动画：透明度淡入，不抢主标题焦点 */
-  animation: greeting-fade-in 0.6s ease-out 0.15s both;
-}
-
-@keyframes greeting-fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* 主菜单进度展示 */
-.scene-progress {
-  margin: -16px 0 32px;
+.scene-header {
+  position: absolute;
+  top: max(28px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  pointer-events: none; /* 不阻挡卡片下方点击；自身没有可点元素 */
+  /* 入场动画：与 .scene 整体淡入协调，再叠一段轻量上滑 */
+  animation: scene-header-enter 0.55s ease-out 0.12s both;
 }
-
-.scene-progress .progress-line.main {
-  font-size: 15px;
+.scene-header.empty {
+  display: none;
+}
+.scene-header-greeting {
+  font-size: 14px;
   letter-spacing: 3px;
+  color: var(--accent-strong, var(--text));
+  font-weight: 500;
+  text-align: center;
+  /* 长昵称兜底 */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scene-header-progress {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  color: var(--text-soft);
+  /* 不让进度行碰底部太死板 */
+  line-height: 1.4;
+}
+.scene-header-progress .hp-line {
   color: var(--text);
   font-weight: 500;
-}
-
-.scene-progress .progress-line.sub {
-  font-size: 12px;
   letter-spacing: 2px;
+}
+.scene-header-progress .hp-sub {
   color: var(--text-soft);
 }
-
-.scene-progress .progress-bar {
-  margin-top: 6px;
-  width: 100%;
-  max-width: 240px;
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(58, 52, 43, 0.1);
-  overflow: hidden;
+.scene-header-progress .hp-dot {
+  color: var(--text-muted);
+  opacity: 0.6;
 }
 
-.scene-progress .progress-bar-fill {
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    var(--accent),
-    #f1b87c
-  );
-  border-radius: 2px;
-  transition: width 0.4s ease;
+@keyframes scene-header-enter {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }
 
 .btn-group {
@@ -961,24 +975,9 @@ body {
 }
 
 /*
- * 结算 / 失败页的昵称称呼。
- * 位置：紧贴在主标题下方、副标题之上，与主菜单 .scene-greeting 视觉布局一致。
- * 因结算卡内容更紧凑，间距更小一档。
+ * 结算 / 失败页的昵称称呼已迁移到 .scene-header 通用组件。
+ * 此处不再保留 .result-greeting 样式（如有定制可在 .scene-header-greeting 上做）。
  */
-.result-greeting {
-  margin: -2px 0 6px;
-  font-size: 12px;
-  letter-spacing: 2px;
-  color: var(--accent, var(--text-soft));
-  font-weight: 500;
-  text-align: center;
-  /* 长昵称兜底 */
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  animation: greeting-fade-in 0.5s ease-out 0.1s both;
-}
 
 .star {
   display: inline-block;
@@ -1956,16 +1955,26 @@ body {
   .scene-subtitle {
     margin-bottom: 28px;
   }
-  .scene-progress {
-    margin: -10px 0 24px;
+  /* Scene 顶部 header：移动端字号收紧、距顶部更近 */
+  .scene.has-scene-header {
+    padding-top: 64px;
   }
-  .scene-progress .progress-line.main {
-    font-size: 13px;
+  .scene-header {
+    top: max(16px, env(safe-area-inset-top));
+    gap: 4px;
+    max-width: calc(100% - 24px);
+  }
+  .scene-header-greeting {
+    font-size: 12px;
     letter-spacing: 2px;
   }
-  .scene-progress .progress-line.sub {
+  .scene-header-progress {
     font-size: 11px;
     letter-spacing: 1px;
+    gap: 4px;
+  }
+  .scene-header-progress .hp-line {
+    letter-spacing: 1.5px;
   }
   /* 关卡选择卡片：移动端铺满更多空间 */
   .scene-card-wide {
@@ -2178,8 +2187,21 @@ body {
   .scene-subtitle {
     margin-bottom: 16px;
   }
-  .scene-progress {
-    margin: -8px 0 14px;
+  /* 横屏（手机横放）高度紧张：scene-header 紧贴顶部并缩字 */
+  .scene.has-scene-header {
+    padding-top: 36px;
+  }
+  .scene-header {
+    top: max(8px, env(safe-area-inset-top));
+    gap: 2px;
+  }
+  .scene-header-greeting {
+    font-size: 11px;
+    letter-spacing: 1.5px;
+  }
+  .scene-header-progress {
+    font-size: 10px;
+    letter-spacing: 1px;
   }
   .hud-top {
     top: calc(8px + env(safe-area-inset-top));
