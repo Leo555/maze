@@ -514,7 +514,7 @@ async function main(): Promise<void> {
   console.log('\n=== Anti-cheat: unlock_delta + write lock ===');
   {
     const code3 = 'kPmR3gT5';
-    // 先写入一个已有进度（unlocked=2）。注意 save 内部有限流（30s 最小间隔），
+    // 先写入一个已有进度（unlocked=2）。注意 save 内部有限流（5s 最小间隔），
     // 所以接下来用 code3 第二次正常写已经会被 too_fast 拦——为此我们用不同 IP+UA 避免
     // 多端并发判定，并直接清掉 sess 锚来绕过 L1 频率限制以测互斥锁本身。
     {

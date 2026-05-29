@@ -8,8 +8,9 @@
  *
  * 三层限流（命中即拒，附带友好错误码供前端文案路由）：
  *
- *   L1 频率上限   30s 内最多 1 次 save        维度 code            error: too_fast
- *     - 真人 10s 通关 + UI + 网络 RTT，30s 留足缓冲；脚本重放必命中
+ *   L1 频率上限   5s 内最多 1 次 save         维度 code            error: too_fast
+ *     - 真人最快 10s 通关，但"上一关结算 + 下一关游玩"间隔可低至 15s，
+ *       早期版本卡 30s 会把连续过关误判为 too_fast；5s 仅挡脚本重放
  *
  *   L2 突发上限   5 min 内最多 12 次 save     维度 code            error: too_many_requests
  *     - 真人 5 分钟最多 5-8 局（含读秒/卡关），12 次留 1.5 倍冗余
@@ -32,8 +33,17 @@
 import { kv } from '@vercel/kv';
 import { createHash } from 'node:crypto';
 
-/** L1 最小提交间隔（秒）—— 一局最快 10s，给到 30s 缓冲足够 */
-const MIN_INTERVAL_SEC = 30;
+/**
+ * L1 最小提交间隔（秒）。
+ *
+ * 经实测复盘：玩家通关后会立刻进入下一关，前几关入门关 10–20s 即可通过，
+ * 真实"两次 save 间隔" = 上一关结算耗时 + 下一关游玩耗时 ≈ 15–30s。
+ * 30s 阈值会把"连续过两关"的合法行为误判为 too_fast，让排行榜数据落后于本地。
+ *
+ * 5s 既能挡住脚本重放（< 5s 重提一定不是真人），也不会误伤真实节奏；
+ * 真正抵御脚本批量的是 L2 突发上限 + L3 IP 多 code 滥用 + unlock_delta_too_large。
+ */
+const MIN_INTERVAL_SEC = 5;
 /** L2 5 分钟上限 */
 const BURST_WINDOW_SEC = 5 * 60;
 const BURST_MAX = 12;

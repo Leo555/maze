@@ -77,6 +77,16 @@ export class Storage {
   private bootstrapResolve: (() => void) | null = null;
   readonly bootstrapPromise: Promise<void>;
 
+  /**
+   * 通关后 push 的自动重试定时器。
+   *
+   * 背景：限流（too_fast）或网络抖动会让 push 失败，此时本地已写入但云端没更新，
+   * 玩家下次启动 bootstrap 拉云端会把本地覆盖回旧进度——表现为"通关 2 关排行榜只 1 关"。
+   * 这里在失败时按后端建议的 retryAfterSec 延后一次自动重试；同时只允许一个 pending
+   * 任务，新一次 submit 失败会顶替旧 timer，让重试始终对齐"最新进度"。
+   */
+  private pushRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
   constructor() {
     this.code = this.loadOrCreateCode();
     this.data = this.loadLocal();
@@ -266,9 +276,11 @@ export class Storage {
    *
    * 流程：
    *   1. 本地数据更新（瞬时反馈，不阻塞 UI）
-   *   2. 后台 push 到云端：
-   *      - 成功：用云端返回的最终值（last-write-wins 后）覆盖本地，触发 onChange
-   *      - 失败：通过 onPushError 通知 UI 层，本地保留写入（玩家通关感受不被打断）
+   *   2. 后台 push 到云端（带一次自动重试）：
+   *      - 成功：lastPushSuccessAt 推进
+   *      - 短暂错误（too_fast / network）：按后端建议的 retryAfterSec 延后重试一次，
+   *        重试用"届时最新的 this.data"，避免连续过关时云端永远落后于本地
+   *      - 仍失败 / 严重错误：通过 onPushError 通知 UI 层，本地保留写入
    *
    * @returns 本地是否产生新最佳记录（用于结算页是否显示"刷新纪录"）
    */
@@ -293,12 +305,68 @@ export class Storage {
       this.data.unlocked = levelId + 1;
     }
     this.flushLocal();
-    // 后台 push：失败通过 pushErr 回调让 UI 决定如何提示
-    void pushProgress(this.code, this.data).then((r) => {
-      if (!r.ok && r.error) this.notifyPushError(r.error, r.retryAfterSec);
-    });
+    // 后台 push（带一次自动重试）
+    void this.pushWithRetry();
     this.notifyChange();
     return updated;
+  }
+
+  /**
+   * 推云端，并在短暂限流 / 网络异常时按后端建议自动重试一次。
+   *
+   * 关键设计：
+   *   - 重试时读 this.data 的最新值，不是发起时的快照——这样玩家在等待间又通关一次
+   *     也能一并补上，云端最终一致
+   *   - 同时只允许一个 pending 重试 timer；新一次失败 push 会清掉旧的 timer 重新挂
+   *   - 严重错误（concurrent_play / ip_abuse / unlock_delta_too_large / forbidden /
+   *     bad_*）不重试，立即通知 UI；这些场景重试无意义甚至会放大问题
+   *   - 启动后正在等待重试时若收到一次新的 push 成功（lastPushSuccessAt 推进过），
+   *     timer 到点也直接放行——避免重复推同一份数据
+   */
+  private async pushWithRetry(): Promise<void> {
+    const r = await pushProgress(this.code, this.data);
+    if (r.ok) {
+      // 成功后取消未触发的旧 retry，避免重复推
+      if (this.pushRetryTimer) {
+        clearTimeout(this.pushRetryTimer);
+        this.pushRetryTimer = null;
+      }
+      return;
+    }
+
+    // 仅这两种是"等一会大概率能成"的瞬态错误，值得重试
+    const isTransient = r.error === 'too_fast' || r.error === 'network';
+    if (!isTransient) {
+      this.notifyPushError(r.error!, r.retryAfterSec);
+      return;
+    }
+
+    // 取消旧的 pending retry，确保只挂一个最新的
+    if (this.pushRetryTimer) {
+      clearTimeout(this.pushRetryTimer);
+      this.pushRetryTimer = null;
+    }
+
+    // 后端建议的 retryAfterSec 优先；too_fast 必带，network 没有就给个温和默认值
+    const waitSec = Math.max(1, r.retryAfterSec ?? (r.error === 'network' ? 3 : 5));
+    this.pushRetryTimer = setTimeout(() => {
+      this.pushRetryTimer = null;
+      void this.retryPushOnce();
+    }, waitSec * 1000);
+  }
+
+  /**
+   * 实际执行重试的那一次 push。失败后不再继续重试（避免限流加剧），
+   * 直接 notify 让 UI 兜底告知玩家。
+   *
+   * 重试用的是 this.data 当前最新值——玩家在等待期间又通关一次也能一并补上，
+   * 多推一次同样的数据是幂等的，不会污染云端。
+   */
+  private async retryPushOnce(): Promise<void> {
+    const r = await pushProgress(this.code, this.data);
+    if (r.ok) return;
+    // 重试仍失败：不再继续，让用户感知到（避免无限重试 + toast 静默丢数据）
+    if (r.error) this.notifyPushError(r.error, r.retryAfterSec);
   }
 
   /**
