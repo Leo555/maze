@@ -591,14 +591,12 @@ body {
  *
  * 内容：
  *   - .scene-header-greeting  欢迎语 / 称呼语（玩家昵称驱动，无昵称时不渲染）
- *   - .scene-header-progress  进度提示（下一关 / 已通关 / 累计星数；用 dot 分隔）
  *
  * 设计说明：
  *   - 用 absolute 而不是 column flex：保留 card 在视觉中心，避免 header 矮 / 高 时
  *     把卡片向下推得不一致；header 永远在屏幕顶部"红框"区域内，节奏稳定。
- *   - 移动端 .scene-card 设了 max-height + overflow，header 的 absolute 定位
- *     不会被卡片遮挡（z-index 默认即可，header 在 DOM 顺序上先于 card 但通过
- *     绝对定位脱离文档流，仍可被 card 内容覆盖；不过实际上 card 不会撞到顶部）。
+ *   - 历史上还承载过 .scene-header-progress（下一关/通关数/星数），后下线，
+ *     相关进度表达已分散到主菜单按钮文案 / 选关页 / 排行榜，不在 header 重复。
  */
 .scene-header {
   position: absolute;
@@ -629,30 +627,6 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.scene-header-progress {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  flex-wrap: wrap;
-  justify-content: center;
-  font-size: 12px;
-  letter-spacing: 1.5px;
-  color: var(--text-soft);
-  /* 不让进度行碰底部太死板 */
-  line-height: 1.4;
-}
-.scene-header-progress .hp-line {
-  color: var(--text);
-  font-weight: 500;
-  letter-spacing: 2px;
-}
-.scene-header-progress .hp-sub {
-  color: var(--text-soft);
-}
-.scene-header-progress .hp-dot {
-  color: var(--text-muted);
-  opacity: 0.6;
 }
 
 @keyframes scene-header-enter {
@@ -1969,14 +1943,6 @@ body {
     font-size: 12px;
     letter-spacing: 2px;
   }
-  .scene-header-progress {
-    font-size: 11px;
-    letter-spacing: 1px;
-    gap: 4px;
-  }
-  .scene-header-progress .hp-line {
-    letter-spacing: 1.5px;
-  }
   /* 关卡选择卡片：移动端铺满更多空间 */
   .scene-card-wide {
     min-width: 0;
@@ -2199,10 +2165,6 @@ body {
   .scene-header-greeting {
     font-size: 11px;
     letter-spacing: 1.5px;
-  }
-  .scene-header-progress {
-    font-size: 10px;
-    letter-spacing: 1px;
   }
   .hud-top {
     top: calc(8px + env(safe-area-inset-top));

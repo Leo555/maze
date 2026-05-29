@@ -6,15 +6,13 @@
  *
  * 职责：
  *   - 欢迎语 / 称呼语：根据玩家昵称 + 上下文生成（"你好"/"欢迎回来"/"太棒了"等）
- *   - 进度提示：下一关、已通关数 / 总关卡数 + 累计星数
  *
  * 设计说明：
- *   - 各页面可通过 buildSceneHeader 选项自定义欢迎语，进度提示统一从 storage 读
- *   - 没有昵称时欢迎语整行隐藏（保持低打扰），只显示进度
- *   - 没有任何进度数据 / 全新存档时只显示欢迎语
- *   - 为避免与 .scene-card 内部内容重复：原 MainMenu 卡片内的 .scene-greeting 与
- *     .scene-progress 已移除，由本组件统一承担
- *   - 订阅 storage.onChange 自动刷新（昵称、通关数变更场景），由调用方在 scene 移除时取消
+ *   - 各页面可通过 buildSceneHeader 选项自定义欢迎语口吻
+ *   - 没有昵称时欢迎语整行隐藏（保持低打扰）
+ *   - 进度提示已下线：相关信息（下一关 / 已通关 / 累计星数）已分散到
+ *     主菜单按钮文案 / 选关页 / 排行榜，不在 header 重复
+ *   - 订阅 storage.onChange 自动刷新（昵称变更场景），由调用方在 scene 移除时取消
  */
 
 import { storage } from '../../core/Storage';
@@ -36,42 +34,14 @@ export type SceneGreetingContext =
 export interface SceneHeaderOptions {
   /** 欢迎语上下文，决定文案口吻；不传则不显示欢迎语 */
   greeting?: SceneGreetingContext;
-  /** 是否显示进度提示行；默认 true */
-  showProgress?: boolean;
 }
 
-/** 计算进度数据（与 MainMenu 内部 computeProgress 保持一致语义） */
-function computeProgress(): {
-  cleared: number;
-  total: number;
-  stars: number;
-  starsMax: number;
-  fresh: boolean;
-  allCleared: boolean;
-  nextLevelName: string | null;
-} {
-  let cleared = 0;
-  let stars = 0;
+/** 是否处于"完全没玩过"状态（只用于欢迎语口吻判定） */
+function isFresh(): boolean {
   for (const lv of levels) {
-    const r = storage.getRecord(lv.id);
-    if (r?.cleared) {
-      cleared++;
-      stars += r.bestStars;
-    }
+    if (storage.getRecord(lv.id)?.cleared) return false;
   }
-  const next = levels.find((lv) => {
-    const r = storage.getRecord(lv.id);
-    return storage.isUnlocked(lv.id) && (!r || !r.cleared);
-  });
-  return {
-    cleared,
-    total: levels.length,
-    stars,
-    starsMax: levels.length * 3,
-    fresh: cleared === 0,
-    allCleared: cleared >= levels.length,
-    nextLevelName: next?.name ?? null,
-  };
+  return true;
 }
 
 /** 根据上下文与昵称生成欢迎语；昵称为空返回 null */
@@ -102,18 +72,17 @@ function buildGreeting(
 export function buildSceneHeader(
   opts: SceneHeaderOptions = {},
 ): { element: HTMLElement; refresh: () => void } {
-  const { greeting, showProgress = true } = opts;
+  const { greeting } = opts;
   const root = document.createElement('div');
   root.className = 'scene-header';
 
   const render = (): void => {
     root.innerHTML = '';
-    const p = computeProgress();
     const nick = storage.getNick();
 
-    // 欢迎语行
+    // 欢迎语行（唯一内容）
     if (greeting) {
-      const text = buildGreeting(greeting, nick, p.fresh);
+      const text = buildGreeting(greeting, nick, isFresh());
       if (text) {
         const g = document.createElement('div');
         g.className = 'scene-header-greeting';
@@ -122,32 +91,7 @@ export function buildSceneHeader(
       }
     }
 
-    // 进度行：fresh 时显示"共 N 关 等你探索"，已开始时显示"下一关 · X / 已通关 a/b · ★ s/m"
-    if (showProgress) {
-      const prog = document.createElement('div');
-      prog.className = 'scene-header-progress';
-      if (p.allCleared) {
-        prog.innerHTML = `
-          <span class="hp-line">已 全 部 通 关</span>
-          <span class="hp-dot">·</span>
-          <span class="hp-sub">★ ${p.stars} / ${p.starsMax}</span>
-        `;
-      } else if (p.fresh) {
-        prog.innerHTML = `
-          <span class="hp-line">共 ${p.total} 关 等 你 探 索</span>
-        `;
-      } else {
-        prog.innerHTML = `
-          ${p.nextLevelName ? `<span class="hp-line">下 一 关 · ${p.nextLevelName}</span><span class="hp-dot">·</span>` : ''}
-          <span class="hp-sub">已 通 关 ${p.cleared} / ${p.total}</span>
-          <span class="hp-dot">·</span>
-          <span class="hp-sub">★ ${p.stars} / ${p.starsMax}</span>
-        `;
-      }
-      root.appendChild(prog);
-    }
-
-    // 整行都没有内容（无昵称且不显示进度）→ 隐藏占位避免空白条
+    // 没有任何内容（无昵称 / 未传 greeting）→ 加 empty 标记便于 CSS 折叠占位
     if (root.children.length === 0) {
       root.classList.add('empty');
     } else {
@@ -157,7 +101,7 @@ export function buildSceneHeader(
 
   render();
 
-  // 订阅变更（昵称同步、通关进度回写等）
+  // 订阅变更（昵称同步等）
   const unsub = storage.onChange(render);
 
   return {
