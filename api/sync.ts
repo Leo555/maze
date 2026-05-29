@@ -5,10 +5,16 @@
  * 鉴权：无（持有 code = 持有读权限）
  * 同源校验：必须来自白名单 Origin/Referer，拦第三方网页直接拉取
  * 限流：同 IP 5 分钟最多 30 次。
+ *
+ * 实现说明：
+ *   query 解析用 WHATWG URL（new URL + searchParams）而不是 req.query。
+ *   `req.query` 由 Vercel runtime 注入，部分历史版本内部仍用 node:url.parse()，
+ *   会触发 [DEP0169] DeprecationWarning（Function logs 中可见）。
+ *   用 WHATWG URL 自己解析既符合现代规范、也避免业务路径依赖该旧 API。
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { json, checkOrigin, getClientIp } from './_lib/http.js';
+import { json, checkOrigin, getClientIp, getQueryParam } from './_lib/http.js';
 import { getProgress } from './_lib/kv.js';
 import { isValidCode } from '../shared/types.js';
 import { kv } from '@vercel/kv';
@@ -32,7 +38,7 @@ export default async function handler(
     return;
   }
 
-  const code = String(req.query.code || '').trim();
+  const code = (getQueryParam(req, 'code') || '').trim();
   if (!isValidCode(code)) {
     json(res, 400, { error: 'bad_code' });
     return;

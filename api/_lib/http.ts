@@ -85,3 +85,24 @@ export function getClientIp(req: VercelRequest): string {
   const xff = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
   return xff || req.socket.remoteAddress || 'unknown';
 }
+
+/**
+ * 解析 query string 中的单个参数（用 WHATWG URL，不依赖 req.query）。
+ *
+ * 为什么不直接用 req.query：
+ *   `req.query` 由 Vercel runtime 注入，在生产 runtime 上内部曾用
+ *   `node:url.parse(req.url, true)` 实现，会在 Function 日志中产生
+ *   [DEP0169] DeprecationWarning（'url.parse() is not standardized'）。
+ *   用 WHATWG URL 自己解析既符合现代规范，也让业务路径不再依赖旧 API。
+ *
+ * 注意：req.url 是 path+query（如 `/api/sync?code=AbCd1234`），不含 origin，
+ * 因此 new URL 必须传一个 base，这里用 `http://localhost` 占位即可。
+ */
+export function getQueryParam(req: VercelRequest, name: string): string | null {
+  try {
+    const u = new URL(req.url || '/', 'http://localhost');
+    return u.searchParams.get(name);
+  } catch {
+    return null;
+  }
+}
