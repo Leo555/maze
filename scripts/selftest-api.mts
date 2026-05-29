@@ -278,28 +278,92 @@ async function main(): Promise<void> {
   console.log('\n=== GET /api/leaderboard ===');
   const lbH = await loadHandler('leaderboard.ts');
 
-  // 综合榜：第一名应该是 code2
+  // 综合榜：第一名应该是 code2（验证不再泄露 code、isMe 由 ?me 触发）
   {
     const res = makeRes();
     await lbH(makeReq({ url: '/api/leaderboard?type=overall&limit=10' }), res);
     const body = parseJson(res) as {
-      items?: { code: string; rank: number; cleared: number; nick: string | null }[];
+      items?: {
+        rank: number;
+        cleared: number;
+        nick: string | null;
+        isMe: boolean;
+        code?: string; // 安全断言用：必须不存在
+      }[];
     };
     ok('综合榜 → 200', res.statusCode === 200);
-    ok('top1 是 code2', body.items?.[0]?.code === code2, body.items?.[0]);
-    ok('top1 cleared=5', body.items?.[0]?.cleared === 5);
-    ok('top2 是 code1', body.items?.[1]?.code === code1);
-    ok('top2 nick=迷雾旅人', body.items?.[1]?.nick === '迷雾旅人');
+    // 通过通关数判定 top1 是 code2（cleared=5）；不再用 code 比对
+    ok('top1 cleared=5（即 code2）', body.items?.[0]?.cleared === 5);
+    ok('top2 nick=迷雾旅人（即 code1）', body.items?.[1]?.nick === '迷雾旅人');
+    // 安全：不带 me 时所有 isMe 必须为 false
+    ok('未带 me → isMe 全为 false', body.items?.every((it) => it.isMe === false) === true);
+    // 安全：响应中不能再含明文 code 字段
+    ok(
+      '响应不再泄露 code 字段',
+      body.items?.every((it) => !('code' in it)) === true
+    );
+  }
+
+  // 综合榜带 ?me=：仅命中行 isMe=true，其它 false
+  {
+    const res = makeRes();
+    await lbH(
+      makeReq({
+        url: `/api/leaderboard?type=overall&limit=10&me=${code1}`,
+      }),
+      res
+    );
+    const body = parseJson(res) as {
+      items?: { rank: number; nick: string | null; isMe: boolean }[];
+    };
+    ok('带 me=code1 → 200', res.statusCode === 200);
+    // code1 是 top2（nick=迷雾旅人）
+    ok('me=code1 → 第 2 行 isMe=true', body.items?.[1]?.isMe === true);
+    ok('me=code1 → 其它行 isMe=false', body.items?.[0]?.isMe === false);
+  }
+
+  // me 参数非法（不符合 8 位 code 格式）→ 静默忽略，不报错
+  {
+    const res = makeRes();
+    await lbH(makeReq({ url: '/api/leaderboard?type=overall&me=hack' }), res);
+    const body = parseJson(res) as {
+      items?: { isMe: boolean }[];
+    };
+    ok('me 非法格式 → 静默忽略，仍 200', res.statusCode === 200);
+    ok(
+      'me 非法格式 → isMe 全 false',
+      body.items?.every((it) => it.isMe === false) === true
+    );
   }
 
   // 关卡榜（第 1 关）
   {
     const res = makeRes();
     await lbH(makeReq({ url: '/api/leaderboard?type=level&id=1&limit=10' }), res);
-    const body = parseJson(res) as { items?: { code: string; bestTime: number }[] };
+    const body = parseJson(res) as {
+      items?: { bestTime: number; isMe: boolean; code?: string }[];
+    };
     ok('关卡榜 → 200', res.statusCode === 200);
-    ok('top1 bestTime=20（code2）', body.items?.[0]?.bestTime === 20);
-    ok('top2 bestTime=30（code1）', body.items?.[1]?.bestTime === 30);
+    ok('top1 bestTime=20（即 code2）', body.items?.[0]?.bestTime === 20);
+    ok('top2 bestTime=30（即 code1）', body.items?.[1]?.bestTime === 30);
+    ok(
+      '关卡榜响应不再泄露 code 字段',
+      body.items?.every((it) => !('code' in it)) === true
+    );
+  }
+
+  // 关卡榜带 me：命中后 isMe=true
+  {
+    const res = makeRes();
+    await lbH(
+      makeReq({ url: `/api/leaderboard?type=level&id=1&me=${code2}` }),
+      res
+    );
+    const body = parseJson(res) as {
+      items?: { bestTime: number; isMe: boolean }[];
+    };
+    ok('关卡榜带 me=code2 → top1 isMe=true', body.items?.[0]?.isMe === true);
+    ok('关卡榜带 me=code2 → top2 isMe=false', body.items?.[1]?.isMe === false);
   }
 
   // 错误关卡 id

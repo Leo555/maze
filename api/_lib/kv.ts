@@ -113,8 +113,16 @@ export async function updateLeaderboards(
   await pipe.exec();
 }
 
-/** 综合榜 top N（按 score 降序） */
-export async function getOverallTop(limit: number): Promise<OverallRankItem[]> {
+/**
+ * 综合榜 top N（按 score 降序）。
+ *
+ * @param limit  返回条目数（最多 100）
+ * @param viewerCode  可选；请求方自己的 code，用于在响应中标记 isMe（不会回包给前端）
+ */
+export async function getOverallTop(
+  limit: number,
+  viewerCode?: string
+): Promise<OverallRankItem[]> {
   const safe = Math.max(1, Math.min(100, Math.floor(limit)));
   // ZRANGE key 0 N-1 REV WITHSCORES
   const raw = (await kv.zrange('lb:overall', 0, safe - 1, {
@@ -135,18 +143,24 @@ export async function getOverallTop(limit: number): Promise<OverallRankItem[]> {
     const { cleared, stars } = parseOverallScore(scores[i]);
     return {
       rank: i + 1,
-      code: c,
       nick: nicks[i] ?? null,
       cleared,
       stars,
+      // 关键：code 不出包；isMe 由后端比对 viewerCode 后下发，前端零计算、零暴露
+      isMe: viewerCode ? c === viewerCode : false,
     };
   });
 }
 
-/** 单关速通榜（按用时升序） */
+/**
+ * 单关速通榜（按用时升序）。
+ *
+ * @param viewerCode  可选；请求方自己的 code，用于标记 isMe
+ */
 export async function getLevelTop(
   levelId: number,
-  limit: number
+  limit: number,
+  viewerCode?: string
 ): Promise<LevelRankItem[]> {
   const safe = Math.max(1, Math.min(100, Math.floor(limit)));
   if (!Number.isInteger(levelId) || levelId < 1 || levelId > 100) return [];
@@ -172,10 +186,10 @@ export async function getLevelTop(
     const stars = progresses[i]?.records[levelId]?.bestStars ?? 0;
     return {
       rank: i + 1,
-      code: c,
       nick: nicks[i] ?? null,
       bestTime: times[i],
       bestStars: stars,
+      isMe: viewerCode ? c === viewerCode : false,
     };
   });
 }

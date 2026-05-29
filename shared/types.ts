@@ -152,28 +152,38 @@ export function maskCode(code: string): string {
 // 排行榜
 // =====================================================================
 
-/** 综合榜单条记录（前端展示用） */
+/**
+ * 公开榜单条记录（前端展示用）。
+ *
+ * 安全设计：
+ *   - 不暴露玩家 code（持有 code = 持有写权限，公开榜单泄露 code 等于
+ *     广播所有人的"存档钥匙"）
+ *   - 是否为请求方自己由后端通过 ?me=<code> 比对后下发 isMe，
+ *     前端无需也无法独立判定
+ *   - 未设置昵称的玩家用 nick=null + 匿名兜底（前端展示 \"匿 名 玩 家\"）
+ */
 export interface OverallRankItem {
   /** 排名（1-based） */
   rank: number;
-  /** 8 位 code（仅 admin 后台或自己看自己时不脱敏） */
-  code: string;
-  /** 昵称；未设置则为 null，前端用 maskCode 兜底显示 */
+  /** 昵称；未设置则为 null，前端兜底显示匿名 */
   nick: string | null;
   /** 通关数（0-100） */
   cleared: number;
   /** 总星数（0-300） */
   stars: number;
+  /** 是否为发起请求的玩家自己（仅当请求带 ?me=<myCode> 且匹配时为 true） */
+  isMe: boolean;
 }
 
-/** 单关速通榜单条记录 */
+/** 单关速通榜单条记录（同上：不暴露 code） */
 export interface LevelRankItem {
   rank: number;
-  code: string;
   nick: string | null;
   /** 最佳通关用时（秒） */
   bestTime: number;
   bestStars: number;
+  /** 是否为发起请求的玩家自己 */
+  isMe: boolean;
 }
 
 /**

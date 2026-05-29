@@ -149,15 +149,26 @@ export async function pushNick(code: string, nick: string): Promise<boolean> {
   }
 }
 
-/** 拉综合榜 top N */
+/**
+ * 拉综合榜 top N。
+ *
+ * @param limit  返回条目数（默认 50）
+ * @param myCode 可选；玩家自己的 code，用于让后端在响应中标记 isMe。
+ *               传与不传都安全：后端只用它做相等比对，不会回包给前端。
+ */
 export async function fetchOverallTop(
-  limit = 50
+  limit = 50,
+  myCode?: string
 ): Promise<OverallRankItem[]> {
   try {
-    const res = await fetch(
-      `/api/leaderboard?type=overall&limit=${encodeURIComponent(String(limit))}`,
-      { cache: 'no-store' }
-    );
+    const params = new URLSearchParams({
+      type: 'overall',
+      limit: String(limit),
+    });
+    if (myCode && isValidCode(myCode)) params.set('me', myCode);
+    const res = await fetch(`/api/leaderboard?${params.toString()}`, {
+      cache: 'no-store',
+    });
     if (res.status !== 200) return [];
     const data = (await res.json()) as OverallLbResponse;
     return Array.isArray(data.items) ? data.items : [];
@@ -166,17 +177,23 @@ export async function fetchOverallTop(
   }
 }
 
-/** 拉单关速通榜 top N */
+/** 拉单关速通榜 top N（同样支持 myCode 标记 isMe） */
 export async function fetchLevelTop(
   levelId: number,
-  limit = 50
+  limit = 50,
+  myCode?: string
 ): Promise<LevelRankItem[]> {
   if (!Number.isInteger(levelId) || levelId < 1 || levelId > 100) return [];
   try {
-    const res = await fetch(
-      `/api/leaderboard?type=level&id=${levelId}&limit=${encodeURIComponent(String(limit))}`,
-      { cache: 'no-store' }
-    );
+    const params = new URLSearchParams({
+      type: 'level',
+      id: String(levelId),
+      limit: String(limit),
+    });
+    if (myCode && isValidCode(myCode)) params.set('me', myCode);
+    const res = await fetch(`/api/leaderboard?${params.toString()}`, {
+      cache: 'no-store',
+    });
     if (res.status !== 200) return [];
     const data = (await res.json()) as LevelLbResponse;
     return Array.isArray(data.items) ? data.items : [];

@@ -17,7 +17,6 @@ import './leaderboard.css';
 import { fetchOverallTop, fetchLevelTop } from '../core/CloudSync';
 import { levels } from '../config/levels';
 import {
-  maskCode,
   type OverallRankItem,
   type LevelRankItem,
   isValidCode,
@@ -162,14 +161,14 @@ function renderShell(): void {
 
 function renderRow(
   rank: number,
-  code: string,
   nick: string | null,
   rightHtml: string,
   isMe: boolean
 ): string {
   const badgeCls =
     rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : '';
-  const display = nick && nick.length > 0 ? escapeHtml(nick) : maskCode(code);
+  // 未设昵称的玩家：以排名做匿名标签（不再泄露 code 任何形态）
+  const display = nick && nick.length > 0 ? escapeHtml(nick) : `匿 名 旅 人 #${rank}`;
   return `
     <div class="lb-row${isMe ? ' me' : ''}">
       <span class="lb-rank ${badgeCls}">${rank}</span>
@@ -194,8 +193,8 @@ function renderList(kind: Tab, items: OverallRankItem[] | LevelRankItem[]): void
   let myNickFromList: string | null = null;
   const rows: string[] = [];
   for (const it of items) {
-    const isMe = !!myCode && it.code === myCode;
-    if (isMe) {
+    // isMe 由后端比对 ?me=<myCode> 后下发，前端无 code 可比、零暴露
+    if (it.isMe) {
       if (myRank === null) myRank = it.rank;
       if (it.nick && isValidNick(it.nick)) myNickFromList = it.nick;
     }
@@ -204,10 +203,9 @@ function renderList(kind: Tab, items: OverallRankItem[] | LevelRankItem[]): void
       rows.push(
         renderRow(
           o.rank,
-          o.code,
           o.nick,
           `<span class="lb-cleared">${o.cleared} 关</span><span class="lb-stars">★ ${o.stars}</span>`,
-          isMe
+          o.isMe
         )
       );
     } else {
@@ -215,10 +213,9 @@ function renderList(kind: Tab, items: OverallRankItem[] | LevelRankItem[]): void
       rows.push(
         renderRow(
           l.rank,
-          l.code,
           l.nick,
           `<span class="lb-time">${formatTime(l.bestTime)}</span><span class="lb-stars">★ ${l.bestStars}</span>`,
-          isMe
+          l.isMe
         )
       );
     }
@@ -251,7 +248,8 @@ async function loadOverall(): Promise<void> {
     return;
   }
   renderLoading();
-  const items = await fetchOverallTop(TOP_LIMIT);
+  // 把自己的 code 透传给后端用于打 isMe 标记；缺失时榜单仍然能拉但所有 isMe=false
+  const items = await fetchOverallTop(TOP_LIMIT, myCode || undefined);
   cache.set(key, items);
   if (currentTab === 'overall') renderList('overall', items);
 }
@@ -264,7 +262,7 @@ async function loadLevel(id: number): Promise<void> {
     return;
   }
   renderLoading();
-  const items = await fetchLevelTop(id, TOP_LIMIT);
+  const items = await fetchLevelTop(id, TOP_LIMIT, myCode || undefined);
   cache.set(key, items);
   // 异步返回时若用户已切换 tab/关卡，丢弃本次结果
   if (currentTab === 'level' && id === currentLevelId) {
