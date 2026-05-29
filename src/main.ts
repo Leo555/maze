@@ -19,6 +19,7 @@ import { isInWeChat, isStandalone } from './core/Environment';
 import { maybeShowAddToHomeScreen } from './ui/AddToHomeScreen';
 import { storage } from './core/Storage';
 import { showToast } from './ui/Toast';
+import { pushErrorMessage } from './core/PushErrorMessage';
 import { isValidCode } from '../shared/types';
 
 // === 全局环境标记（CSS 可针对 body[data-env] 做差异化样式）===
@@ -95,6 +96,28 @@ const recoverCode = params.get('recover');
 new Game();
 // 第 2 次以上访问的 iOS Safari 用户，提示「添加到主屏」
 maybeShowAddToHomeScreen();
+
+// === 全局云端写入失败提示 ===
+// 通关 push 在后台进行，失败时由 Storage 通过 onPushError 通知；
+// 这里统一弹 Toast，避免每个调用处都要重复处理。
+// 短间隔内多次触发只展示一次，避免限流场景刷屏。
+let lastPushErrAt = 0;
+storage.onPushError((err, retryAfterSec) => {
+  const now = Date.now();
+  if (now - lastPushErrAt < 1500) return;
+  lastPushErrAt = now;
+  // concurrent_play / ip_abuse / unlock_delta_too_large 是相对严重的安全提示，
+  // 用 error 类型 + 较长展示时间；其它（network/too_fast）用 info 较温和
+  const severe =
+    err === 'concurrent_play' ||
+    err === 'ip_abuse' ||
+    err === 'unlock_delta_too_large';
+  showToast(
+    pushErrorMessage(err, retryAfterSec),
+    severe ? 'error' : 'info',
+    severe ? 4500 : 2400
+  );
+});
 
 // === 后台异步：?recover=xxxxxxxx 扫码恢复 + 云端进度同步 ===
 // 主菜单 / 同步面板订阅了 storage.onChange，云端数据到了会自动刷新 UI

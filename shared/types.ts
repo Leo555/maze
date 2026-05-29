@@ -62,3 +62,96 @@ export const DEFAULT_SAVE: SaveData = {
   records: {},
   unlocked: 1,
 };
+
+// =====================================================================
+// 昵称（排行榜显示用，可选）
+// =====================================================================
+
+/** 昵称长度限制（字符数；中文每个算 1 字） */
+export const NICK_MIN_LENGTH = 1;
+export const NICK_MAX_LENGTH = 12;
+
+/**
+ * 校验昵称合法性（前后端共用）。
+ *
+ * 规则：
+ *   - 长度 1-12 字符
+ *   - 不允许首尾空白（trim 后才校验）
+ *   - 不允许控制字符（\u0000-\u001f \u007f）
+ *   - 允许中英文 / 数字 / 标点 / emoji
+ *
+ * 不做敏感词过滤：项目准则反对过度设计；如发现滥用，由 admin 后台手动清理。
+ */
+export function isValidNick(s: unknown): s is string {
+  if (typeof s !== 'string') return false;
+  if (s !== s.trim()) return false;
+  const len = [...s].length; // 用展开计算 code point 数量，emoji 算 1
+  if (len < NICK_MIN_LENGTH || len > NICK_MAX_LENGTH) return false;
+  // 拒绝控制字符
+  if (/[\u0000-\u001f\u007f]/.test(s)) return false;
+  return true;
+}
+
+/**
+ * 把 8 位 code 脱敏为 3+3 形式（如 jeT***UvAs → jeT***vAs），
+ * 排行榜在玩家未设置昵称时回退展示用。
+ */
+export function maskCode(code: string): string {
+  if (!isValidCode(code)) return '????????';
+  return `${code.slice(0, 3)}***${code.slice(-2)}`;
+}
+
+// =====================================================================
+// 排行榜
+// =====================================================================
+
+/** 综合榜单条记录（前端展示用） */
+export interface OverallRankItem {
+  /** 排名（1-based） */
+  rank: number;
+  /** 8 位 code（仅 admin 后台或自己看自己时不脱敏） */
+  code: string;
+  /** 昵称；未设置则为 null，前端用 maskCode 兜底显示 */
+  nick: string | null;
+  /** 通关数（0-100） */
+  cleared: number;
+  /** 总星数（0-300） */
+  stars: number;
+}
+
+/** 单关速通榜单条记录 */
+export interface LevelRankItem {
+  rank: number;
+  code: string;
+  nick: string | null;
+  /** 最佳通关用时（秒） */
+  bestTime: number;
+  bestStars: number;
+}
+
+/**
+ * 计算综合榜分数：
+ *   score = (unlocked - 1) * 1000 + totalStars
+ *
+ * 设计：
+ *   - (unlocked - 1) 是已通关数量（0-100），权重 1000，确保通关多的人永远在前
+ *   - totalStars 范围 0-300，作为同通关数下的次序键
+ *   - 最大值约 100 * 1000 + 300 = 100300，远低于 IEEE-754 双精度精确整数上限
+ *     (2^53)，KV ZSET 存储无精度损失
+ */
+export function calcOverallScore(progress: SaveData): number {
+  const cleared = Math.max(0, progress.unlocked - 1);
+  let stars = 0;
+  for (const k of Object.keys(progress.records)) {
+    const r = progress.records[Number(k)];
+    if (r) stars += r.bestStars;
+  }
+  return cleared * 1000 + stars;
+}
+
+/** 从 score 反解出 (cleared, stars) */
+export function parseOverallScore(score: number): { cleared: number; stars: number } {
+  const cleared = Math.floor(score / 1000);
+  const stars = score - cleared * 1000;
+  return { cleared, stars };
+}

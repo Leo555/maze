@@ -106,3 +106,39 @@ export function getQueryParam(req: VercelRequest, name: string): string | null {
     return null;
   }
 }
+
+/**
+ * Admin 鉴权。
+ *
+ * 校验顺序：
+ *   1. 必须配置环境变量 ADMIN_CODE（未配置 → 一律 503，避免裸奔）
+ *   2. 请求需带 ?token=xxx，与 ADMIN_CODE 严格相等
+ *
+ * 安全性：
+ *   - admin token 与玩家 code 同空间但不投放，由部署者掌控
+ *   - 双重保险：仍保留同源校验（checkOrigin），admin 接口外部不可调
+ *   - 用 timing-safe 比较避免长度泄露（生产 runtime 上 RTT >> 字符串比较，
+ *     实战意义有限，但加上不亏）
+ */
+export function checkAdmin(req: VercelRequest): { ok: boolean; status: number } {
+  const expected = process.env.ADMIN_CODE;
+  if (!expected) return { ok: false, status: 503 };
+  const token =
+    getQueryParam(req, 'token') ||
+    (typeof req.headers['x-admin-token'] === 'string'
+      ? (req.headers['x-admin-token'] as string)
+      : '') ||
+    '';
+  if (timingSafeEqual(token, expected)) return { ok: true, status: 200 };
+  return { ok: false, status: 401 };
+}
+
+/** 长度敏感的 timing-safe 比较，避免 char-by-char 泄露 */
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
+}

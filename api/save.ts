@@ -7,28 +7,29 @@
  *
  * 鉴权：无（持有 code = 持有写权限）
  *
- * 反作弊：上行进度相对云端 unlocked 增量不超过 5。
- *   如客户端 unlocked 比云端高 6 关以上 → 拒绝（防止本地改成全通关后强推）。
- *
- * 限流：同 IP+code 每 60s 最多 30 次。
+ * 反作弊（多层联动）：
+ *   1. 同源校验（checkOrigin）
+ *   2. 限流 / 多端并发检测（_lib/ratelimit）
+ *      - L1 30s 最小提交间隔（一局最快 10s + 缓冲）
+ *      - L2 5 min 12 次突发上限
+ *      - L3 1 hour 同 IP 用 ≥ 4 个 code 视为滥用
+ *      - 多端并发：sess 锚点 30s 内 IP+UA 都变 → 拒绝
+ *   3. unlocked 增量 ≤ 5（防止本地直接改成全通关后强推）
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { json, checkOrigin, getClientIp } from './_lib/http.js';
-import { getProgress, setProgress } from './_lib/kv.js';
+import {
+  getProgress,
+  setProgress,
+  updateLeaderboards,
+  markActive,
+  ensureFirstSeen,
+} from './_lib/kv.js';
+import { checkWriteRate, commitWriteSession } from './_lib/ratelimit.js';
 import { normalizeSave, isValidCode } from '../shared/types.js';
-import { kv } from '@vercel/kv';
 
-const RATE_LIMIT_WINDOW_SEC = 60;
-const RATE_LIMIT_MAX = 30;
 const MAX_UNLOCK_DELTA = 5;
-
-async function isRateLimited(ip: string, code: string): Promise<boolean> {
-  const key = `rl:save:${ip}:${code}`;
-  const n = await kv.incr(key);
-  if (n === 1) void kv.expire(key, RATE_LIMIT_WINDOW_SEC);
-  return n > RATE_LIMIT_MAX;
-}
 
 function safeJsonParse(s: string): unknown {
   try {
@@ -65,10 +66,17 @@ export default async function handler(
     return;
   }
 
-  // 限流
+  // 多层限流 + 多端并发
   const ip = getClientIp(req);
-  if (await isRateLimited(ip, code)) {
-    json(res, 429, { error: 'too_many_requests' });
+  const ua = String(req.headers['user-agent'] || '');
+  const rate = await checkWriteRate(code, ip, ua);
+  if (!rate.ok) {
+    // 多端并发用 409 Conflict（语义上是"资源被另一处占用"）；
+    // 限流类（too_fast / too_many_requests / ip_abuse）统一 429
+    const status = rate.error === 'concurrent_play' ? 409 : 429;
+    const payload: Record<string, unknown> = { error: rate.error };
+    if (rate.retryAfterSec) payload.retryAfterSec = rate.retryAfterSec;
+    json(res, status, payload);
     return;
   }
 
@@ -80,5 +88,17 @@ export default async function handler(
   }
 
   await setProgress(code, incoming);
+
+  // 更新会话锚点：必须在 setProgress 成功后，避免把同一玩家的连续 save
+  // 误判为多端并发
+  void commitWriteSession(code, ip, ua).catch(() => {});
+
+  // 副作用（fire-and-forget，失败不影响主响应）：
+  //   - 排行榜更新（综合榜 + 当前关速通榜）
+  //   - 活跃天 / 首次创建标记 / 总用户数
+  void updateLeaderboards(code, incoming).catch(() => {});
+  void markActive(code).catch(() => {});
+  void ensureFirstSeen(code).catch(() => {});
+
   json(res, 200, { progress: incoming });
 }
