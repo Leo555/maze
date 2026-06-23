@@ -1,4 +1,37 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="6" fill="#F5EFE6"/>
-  <path d="M6 6h20v4H10v4h12v4H10v4h16v4H6z" fill="#7A8B6F"/>
+  <!--
+    favicon 设计：
+      - 圆角方形底（dawn 米白 #F5EFE6）
+      - 内部一个极简迷宫：左上玩家 → L 形路径 → 右下出口
+      - 所有元素在 4–28 安全区内；16×16 渲染时通过"左上绿 + 右下橙"
+        的对角色块仍能传达品牌识别
+      - 颜色与 og-cover / 应用主题完全一致
+        (玩家 #7A8B6F、出口 #E8A87C、墙 #D4C5A9、路径 #DCC9A8、底 #F5EFE6)
+
+    设计取舍：
+      原本加了内部分隔墙增强迷宫层次，但在 16/32px 缩放后变成噪点
+      干扰识别——简洁压倒丰富，删掉。
+      玩家/出口的"中心高光点"同理，小尺寸下变像素噪点，移除。
+  -->
+
+  <!-- 底色（圆角方） -->
+  <rect width="32" height="32" rx="7" fill="#F5EFE6"/>
+
+  <!-- 外圈墙体（柔米色） -->
+  <rect x="4" y="4" width="24" height="24" rx="3"
+        fill="none" stroke="#D4C5A9" stroke-width="2"/>
+
+  <!--
+    L 形主路径：玩家中心 (8,8) → 角 (8,22) → 出口中心 (22,22)
+    拐角点比出口/墙体内缩 2px，避免路径贴到外墙看起来像"墙塌了"
+  -->
+  <path d="M8 8 L8 22 L22 22"
+        fill="none" stroke="#DCC9A8" stroke-width="6"
+        stroke-linecap="round" stroke-linejoin="round" opacity="0.95"/>
+
+  <!-- 玩家（左上角，绿色方块） -->
+  <rect x="5" y="5" width="6" height="6" rx="1.2" fill="#7A8B6F"/>
+
+  <!-- 出口（右下角，橙色方块） -->
+  <rect x="21" y="21" width="6" height="6" rx="1.2" fill="#E8A87C"/>
 </svg>
