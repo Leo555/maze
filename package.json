@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "gen:og": "node scripts/gen-og-cover.mjs",
+    "gen:og": "node scripts/gen-og-images.mjs",
     "gen:icons": "node scripts/gen-pwa-icons.mjs",
     "test:units": "tsx scripts/selftest-admin.mts",
     "test:api": "tsx --import ./scripts/kv-mock-loader.mts scripts/selftest-api.mts",

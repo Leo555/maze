@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  社交分享方版 1024×1024（微信 URL 卡 / 朋友圈缩略图 / itemprop=image 通用）
+
+  设计原则：
+    - 微信 URL 卡片的右侧缩略图槽是正方形裁切，使用方版可避免横版被裁丢
+    - 所有关键信息（迷宫缩影 + 标题 + 卖点 + 域名）全部塞入正方形可见区
+    - 视觉风格与 og-cover.svg 横版一致（dawn 主题、相同色板、相同迷宫意象）
+
+  布局（自上而下）：
+    [ 0   ~  140 ] 顶部留白 + 迷宫缩影顶部
+    [ 140 ~  580 ] 居中迷宫缩影 420×420
+    [ 580 ~  720 ] 主标题 + 英文副标题 + 分隔线
+    [ 720 ~  800 ] 卖点行
+    [ 800 ~  900 ] CTA 胶囊（居中）
+    [ 900 ~ 1024 ] 域名
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <!-- 背景渐变：晨曦米白 → 米黄（与横版一致） -->
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F5EFE6" />
+      <stop offset="100%" stop-color="#ECE4D3" />
+    </linearGradient>
+    <!-- 出口光晕 -->
+    <radialGradient id="exitGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#E8A87C" stop-opacity="0.95" />
+      <stop offset="60%" stop-color="#E8A87C" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#E8A87C" stop-opacity="0" />
+    </radialGradient>
+    <!-- 玩家光晕 -->
+    <radialGradient id="playerGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#7A8B6F" stop-opacity="0.55" />
+      <stop offset="100%" stop-color="#7A8B6F" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <!-- 背景 -->
+  <rect width="1024" height="1024" fill="url(#bg)" />
+
+  <!-- ========== 顶部：居中迷宫缩影 420×420 ========== -->
+  <!--
+    单元 cs=60，迷宫起点 x0=302 y0=140 → 居中：(1024-420)/2 = 302
+    7×7 = 420 网格；元素与横版同型（玩家左上、出口右下、钥匙居中、走过路径）
+  -->
+  <g transform="translate(302,140)">
+    <!-- 地板底色（稍微调高圆角，方版更圆润） -->
+    <rect x="0" y="0" width="420" height="420" rx="18" fill="#EFE7D6" />
+
+    <!-- 已探索路径底色 -->
+    <g fill="#E5D9C0" opacity="0.7">
+      <rect x="30" y="30" width="60" height="60" />
+      <rect x="90" y="30" width="60" height="60" />
+      <rect x="90" y="90" width="60" height="60" />
+      <rect x="90" y="150" width="60" height="60" />
+      <rect x="150" y="150" width="60" height="60" />
+      <rect x="210" y="150" width="60" height="60" />
+      <rect x="210" y="210" width="60" height="60" />
+      <rect x="210" y="270" width="60" height="60" />
+      <rect x="270" y="270" width="60" height="60" />
+      <rect x="330" y="270" width="60" height="60" />
+    </g>
+
+    <!-- 墙体（同横版意象，按 60px 网格重排） -->
+    <g fill="#D4C5A9">
+      <!-- 外框 -->
+      <rect x="0" y="0" width="420" height="7" />
+      <rect x="0" y="413" width="420" height="7" />
+      <rect x="0" y="0" width="7" height="420" />
+      <rect x="413" y="0" width="7" height="420" />
+      <!-- 内部分隔（按比例放大） -->
+      <rect x="0" y="90" width="90" height="7" />
+      <rect x="150" y="90" width="7" height="68" />
+      <rect x="90" y="150" width="7" height="68" />
+      <rect x="180" y="0" width="7" height="68" />
+      <rect x="240" y="90" width="7" height="68" />
+      <rect x="270" y="150" width="68" height="7" />
+      <rect x="270" y="180" width="7" height="68" />
+      <rect x="180" y="240" width="7" height="68" />
+      <rect x="90" y="270" width="68" height="7" />
+      <rect x="0" y="300" width="68" height="7" />
+      <rect x="90" y="360" width="240" height="7" />
+      <rect x="330" y="0" width="7" height="68" />
+      <rect x="330" y="115" width="7" height="68" />
+      <rect x="360" y="180" width="7" height="68" />
+    </g>
+
+    <!-- 玩家光晕（左上角格子 30,30 中心） -->
+    <circle cx="60" cy="60" r="42" fill="url(#playerGlow)" />
+    <!-- 玩家方块 + 朝向小三角 -->
+    <rect x="44" y="44" width="32" height="32" rx="5" fill="#7A8B6F" />
+    <polygon points="66,52 74,60 66,68" fill="#F5EFE6" />
+
+    <!-- 出口光晕（右下方向 360,300） -->
+    <circle cx="360" cy="300" r="52" fill="url(#exitGlow)" />
+    <!-- 出口方块 -->
+    <rect x="344" y="284" width="32" height="32" rx="5" fill="#E8A87C" />
+
+    <!-- 钥匙（路径中段 240,180） -->
+    <g transform="translate(240,180)">
+      <circle cx="-4" cy="0" r="7" fill="none" stroke="#C38D9E" stroke-width="3.5" />
+      <rect x="2" y="-2" width="13" height="4" fill="#C38D9E" />
+      <rect x="10" y="-2" width="3" height="7" fill="#C38D9E" />
+    </g>
+  </g>
+
+  <!-- ========== 中段：主标题 ========== -->
+  <text
+    x="512" y="638"
+    text-anchor="middle"
+    font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif"
+    font-size="76" font-weight="500" fill="#2A241C" letter-spacing="14">
+    晨 雾 迷 径
+  </text>
+
+  <!-- 英文副标题 -->
+  <text
+    x="512" y="688"
+    text-anchor="middle"
+    font-family="ui-sans-serif, system-ui, -apple-system, sans-serif"
+    font-size="22" font-weight="400" fill="#A8927A" letter-spacing="10">
+    MISTY · PATH · DAWN
+  </text>
+
+  <!-- 分隔细线（居中 120px 宽） -->
+  <line x1="452" y1="720" x2="572" y2="720" stroke="#D28E5C" stroke-width="3" />
+
+  <!-- ========== 卖点行 ========== -->
+  <text
+    x="512" y="784"
+    text-anchor="middle"
+    font-family="-apple-system, 'PingFang SC', system-ui, sans-serif"
+    font-size="30" font-weight="400" fill="#3a342b" letter-spacing="3">
+    10 章节 · 100 关迷宫挑战
+  </text>
+
+  <!-- ========== CTA 胶囊（居中 240×56） ========== -->
+  <g transform="translate(392,830)">
+    <rect x="0" y="0" width="240" height="56" rx="28"
+          fill="#D28E5C" stroke="#B86F3D" stroke-width="2" />
+    <text x="120" y="37"
+          font-family="-apple-system, 'PingFang SC', system-ui, sans-serif"
+          font-size="22" font-weight="500" fill="#FFFFFF" letter-spacing="6"
+          text-anchor="middle">
+      开 始 游 戏
+    </text>
+  </g>
+
+  <!-- ========== 底部域名 ========== -->
+  <text
+    x="512" y="960"
+    text-anchor="middle"
+    font-family="ui-monospace, 'SF Mono', Menlo, monospace"
+    font-size="20" fill="#A8927A" letter-spacing="2">
+    maze.lz5z.com
+  </text>
+</svg>

@@ -60,10 +60,11 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <!--
       微信内嵌浏览器默认会从页面截图作为分享缩略图，体验差。
-      虽然没接 JSSDK 不能完全自定义分享，但下面的 thumb 图至少能让
-      默认抓取走 favicon 或 og:image 路径，提升基础体验
+      虽然没接 JSSDK 不能完全自定义分享，但 itemprop=image 通常是微信抓取的
+      首选字段：用方版 1024×1024，避免微信 URL 卡右侧方形缩略图槽把横版
+      左半（标题 + 迷宫缩影）裁掉。
     -->
-    <meta itemprop="image" content="https://maze.lz5z.com/og-cover.png" />
+    <meta itemprop="image" content="https://maze.lz5z.com/og-square.png" />
 
     <!-- 图标 -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -71,7 +72,12 @@
 
     <!--
       Open Graph（微信/朋友圈/Facebook/LinkedIn 等社交分享卡片）
-      注意：og:image 必须是绝对 URL，建议尺寸 1200×630
+      注意：og:image 必须是绝对 URL。
+      列两张：
+        - 方版 1024×1024：微信 URL 卡 / 朋友圈缩略图（方形裁切，关键元素居中可见）
+        - 横版 1200×630：Twitter / Facebook / LinkedIn / Google 搜索卡（1.91:1 完整展示）
+      Open Graph 协议允许多张 og:image，平台会根据自身偏好挑选；同时给每张
+      声明 width/height，避免抓取器需要额外发 HEAD 请求探测尺寸。
     -->
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="zh_CN" />
@@ -82,9 +88,16 @@
       content="一款唯美的浏览器迷宫游戏，10 章节 100 关，收集钥匙、穿越迷雾，挑战最佳通关步数。"
     />
     <meta property="og:url" content="https://maze.lz5z.com/" />
+    <!-- 方版优先（微信等方形缩略图场景） -->
+    <meta property="og:image" content="https://maze.lz5z.com/og-square.png" />
+    <meta property="og:image:width" content="1024" />
+    <meta property="og:image:height" content="1024" />
+    <meta property="og:image:alt" content="晨雾迷径 · 100 关迷宫解谜游戏" />
+    <!-- 横版（Twitter / Facebook / Google 搜索卡的 1.91:1 完整展示） -->
     <meta property="og:image" content="https://maze.lz5z.com/og-cover.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="晨雾迷径 · 100 关迷宫解谜游戏" />
 
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image" />
@@ -100,7 +113,7 @@
       Google 可据此在搜索结果中显示更丰富的卡片
       （已 minify，scrapers 解析不需要缩进）
     -->
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"VideoGame","name":"晨雾迷径","alternateName":"Misty Path Dawn","url":"https://maze.lz5z.com/","image":"https://maze.lz5z.com/og-cover.png","description":"唯美风格的浏览器迷宫解谜游戏，含 10 章节 100 关，挑战最佳通关步数与三星评级。","genre":["Puzzle","Maze","Casual"],"inLanguage":"zh-CN","applicationCategory":"Game","operatingSystem":"Any (Web Browser)","gamePlatform":"Web Browser","playMode":"SinglePlayer","offers":{"@type":"Offer","price":"0","priceCurrency":"CNY","availability":"https://schema.org/InStock"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"VideoGame","name":"晨雾迷径","alternateName":"Misty Path Dawn","url":"https://maze.lz5z.com/","image":["https://maze.lz5z.com/og-square.png","https://maze.lz5z.com/og-cover.png"],"description":"唯美风格的浏览器迷宫解谜游戏，含 10 章节 100 关，挑战最佳通关步数与三星评级。","genre":["Puzzle","Maze","Casual"],"inLanguage":"zh-CN","applicationCategory":"Game","operatingSystem":"Any (Web Browser)","gamePlatform":"Web Browser","playMode":"SinglePlayer","offers":{"@type":"Offer","price":"0","priceCurrency":"CNY","availability":"https://schema.org/InStock"}}</script>
   </head>
   <body>
     <!-- 给搜索引擎与禁用 JS 的访客一段可读的 HTML 文本，提升页面"内容质量"信号 -->

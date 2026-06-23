@@ -20,7 +20,7 @@
       ]
     },
     {
-      "source": "/(favicon\\.svg|og-cover\\.png|og-cover\\.svg)",
+      "source": "/(favicon\\.svg|og-cover\\.png|og-cover\\.svg|og-square\\.png|og-square\\.svg)",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=86400, stale-while-revalidate=604800" }
       ]
