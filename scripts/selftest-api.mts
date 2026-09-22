@@ -504,9 +504,14 @@ async function main(): Promise<void> {
     ok('sync 无昵称的 code → nick=null', body.nick === null);
   }
   {
+    // 云端无存档：新约定返回 200 + progress:null，而不是 404
+    // （避免 DevTools 飘红 / 监控 SDK 误报，详见 api/sync.ts 文件头注释）
     const res = makeRes();
     await syncH(makeReq({ url: '/api/sync?code=ZZZZZZZZ' }), res);
-    ok('sync 不存在 → 404', res.statusCode === 404);
+    const body = parseJson(res) as { progress?: unknown; nick?: unknown };
+    ok('sync 不存在 → 200（查询空结果，非错误）', res.statusCode === 200);
+    ok('sync 不存在 → progress=null', body.progress === null);
+    ok('sync 不存在 → nick=null', body.nick === null);
   }
 
   // ---------- 反作弊：unlock_delta TOCTOU 互斥锁 ----------

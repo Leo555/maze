@@ -14,7 +14,13 @@ import type { SaveData, OverallRankItem, LevelRankItem } from '../../shared/type
 import { isValidCode, isValidNick } from '../../shared/types';
 
 interface SyncResponse {
-  progress: SaveData;
+  /**
+   * 云端进度。可能为 null，表示"该 code 在云端没有存档"
+   * （新 code / 过期清理 / 刚切换的空白 code）。
+   * 后端从 2026-09 起对"查不到"统一返回 200 + progress:null，
+   * 而不是 404，避免 DevTools / 监控 SDK 把"空结果"当异常。
+   */
+  progress: SaveData | null;
   /** 云端昵称；可能为 null（玩家从未设置过）。后端字段缺失时统一回退为 null。 */
   nick?: string | null;
 }
@@ -41,9 +47,18 @@ interface LevelLbResponse {
 /**
  * 用 8 位 code 拉取进度 + 昵称。
  *
- * 返回值：
- *   - 拉取成功 → { progress, nick }；nick 在云端未设置时为 null
- *   - 网络异常 / code 不存在 / 限流 → null
+ * 返回值（对调用方的契约保持不变）：
+ *   - 云端存在该 code → { progress, nick }；nick 未设置时为 null
+ *   - 云端不存在 / 网络异常 / 限流 / 参数错 → null
+ *
+ * 后端响应约定（2026-09 调整）：
+ *   - 200 + { progress: SaveData, nick } → 云端有存档
+ *   - 200 + { progress: null, nick: null } → 云端无该 code 的存档（新 code / 已清理）
+ *   - 4xx / 5xx / 网络异常 → 视为拉取失败
+ *
+ * 这里把"200 + progress:null"和"非 200"都收敛为对调用方的 null，
+ * 让 adoptCode / pullFromCloud 只需判断 `remote == null` 即可，
+ * 无需感知底层的 HTTP 状态码。
  *
  * 兼容历史响应：
  *   早期 /api/sync 仅返回 { progress }，未来若灰度发布也只用 progress 字段；
@@ -59,6 +74,9 @@ export async function pullByCode(
     });
     if (res.status === 200) {
       const data = (await res.json()) as SyncResponse;
+      // 后端返回 200 + progress:null 表示"云端没这个 code 的存档"，
+      // 对上层等价于"拉取无结果"，统一返回 null 让调用方走本地存档流程
+      if (data.progress == null) return null;
       return {
         progress: data.progress,
         // 防御：后端理论上保证返回 string|null，但同时验证 isValidNick

@@ -10,6 +10,22 @@
  *   - 玩家启动 / 切换 code 时只发一次请求即可同步两者
  *   - 昵称仅在云端有时返回，缺失时为 null（前端兜底显示 maskCode 即可）
  *
+ * 关于 "code 不存在" 的响应约定（2026-09 调整）：
+ *   历史返回 404 { error: 'not_found' }，但从业务视角看，"查一个 code 没查到"
+ *   属于合法查询空结果，不是错误。前端本就把它当作"云端无进度 → 用本地"处理，
+ *   却让 DevTools Network 面板飘一条红色 404 记录，且被浏览器扩展 / 监控 SDK
+ *   （如 Sentry Network Breadcrumbs）当作接口异常。
+ *
+ *   现改为：progress 不存在时返回 200 { progress: null, nick: null }，
+ *   语义与 leaderboard 空结果（200 空数组）一致，本项目所有查询接口的
+ *   "查不到" 一律用 200 + null/[] 表达。前端 pullByCode 已收敛为
+ *   "progress == null → 视为无云端存档"。
+ *
+ *   仍保留 4xx 的情况：
+ *     - bad_code   400：入参格式错，属于客户端错误
+ *     - forbidden  403：同源校验不过，安全强信号必须保留
+ *     - rate limit 429：限流，需要提醒开发者/前端退避
+ *
  * 实现说明：
  *   query 解析用 WHATWG URL（new URL + searchParams）而不是 req.query。
  *   `req.query` 由 Vercel runtime 注入，部分历史版本内部仍用 node:url.parse()，
@@ -54,11 +70,12 @@ export default async function handler(
   }
 
   // 并发拉取 progress + nick：节省一次 RTT
-  // 注意：progress 不存在视为整个 code 不存在（KV 中 nick 单独存在但 progress 缺失
-  // 是异常状态，比照原行为返回 404 更稳妥）
+  // 注意：progress 不存在视为"云端无存档"，返回 200 + null（详见文件头说明）。
+  // KV 中 nick 单独存在但 progress 缺失是异常状态，仍按"无存档"处理，前端
+  // 拿到 progress=null 会走本地存档流程；nick 也不返回，避免误显示成"云端昵称"。
   const [progress, nick] = await Promise.all([getProgress(code), getNick(code)]);
   if (!progress) {
-    json(res, 404, { error: 'not_found' });
+    json(res, 200, { progress: null, nick: null });
     return;
   }
   json(res, 200, { progress, nick: nick ?? null });
