@@ -2,7 +2,8 @@
  * 彩蛋：右上角连点显示最佳路径
  *
  * 玩法：
- *   - 在右上角 100×100 的热区内于 8 秒滑动窗口里连点 10 次
+ *   - 前置条件：设置中「主音量、音效、音乐」必须同时为 50%
+ *   - 在右上角热区内于 8 秒滑动窗口里连点 10 次
  *   - 触发后基于「玩家当前位置 → 剩余钥匙 → 出口」用 BFS + bitmask DP 求最短路
  *   - 路径常驻显示，由 HUD 上的「✕ 关闭最佳路径」按钮主动关闭
  *
@@ -31,6 +32,16 @@ const WINDOW_MS = 8000;
  *   - 移动端的 100×100 hint 也会被 200 覆盖
  */
 const HOTSPOT = 200;
+
+/** 彩蛋解锁音量：主音量、音效、音乐必须同时恰为该百分比 */
+const UNLOCK_VOLUME_PERCENT = 50;
+
+function isVolumeUnlocked(): boolean {
+  const s = audio.getSettings();
+  return [s.master, s.sfx, s.bgm].every(
+    (v) => Math.round(v * 100) === UNLOCK_VOLUME_PERCENT,
+  );
+}
 
 /**
  * 宿主接口：彩蛋仅在「正在游玩」时才有效。
@@ -62,6 +73,11 @@ export class EasterEgg {
   install(): void {
     const handler = (e: PointerEvent): void => {
       if (!this.host.isPlaying()) return;
+      // 解锁条件：主音量 / 音效 / 音乐 均恰为 50%，否则彩蛋完全静默
+      if (!isVolumeUnlocked()) {
+        this.clicks.length = 0;
+        return;
+      }
       const w = window.innerWidth;
       const inHotspot = e.clientX >= w - HOTSPOT && e.clientY <= HOTSPOT;
       if (!inHotspot) return;
